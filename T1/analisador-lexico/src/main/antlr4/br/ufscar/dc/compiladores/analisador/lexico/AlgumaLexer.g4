@@ -1,0 +1,21 @@
+lexer grammar AlgumaLexer;
+
+PALAVRAS_CHAVES: 'algoritmo' | 'fim_algoritmo' | 'declare' | 'leia' | 'escreva' | 'fim_registro' | 'procedimento' | 'fim_procedimento' | 'funcao' | 'fim_funcao' | 'retorne';
+TIPOS: 'literal' | 'inteiro' | 'real' | 'tipo' | 'var' | '[' | ']' | 'constante' | 'logico' | 'registro';
+CONDICIONAIS: 'se' | 'senao' | 'entao' | 'fim_se' | 'caso' | 'seja' | 'fim_caso' | 'verdadeiro' | 'falso';
+LOOPINGS: 'para' | 'fim_para' | 'ate' | 'faca' | 'enquanto' | 'fim_enquanto';
+OPERADORES: '<-' | '<' | '>' | '<=' | '>=' | '=' | '<>' | '..' | '.';
+ENDERECOS: '^' | '&';
+OPERADORES_LOGICOS: 'e' | 'ou' | 'nao';
+NUM_INT: ('0'..'9')('0'..'9')*;
+NUM_REAL: ('0'..'9')('0'..'9')* '.' ('0'..'9')('0'..'9')*;
+IDENT: ('a'..'z'|'A'..'Z') ('a'..'z'|'A'..'Z'|'0'..'9'|'_')*;
+DELIMITADORES: ',' | ':' | '(' | ')';
+OP_ARIT: '+' | '-' | '*' | '/' | '%';
+CADEIA: '"' ( ESC_SEQ | ~('\n'|'"'|'\\') )* '"';
+ESC_SEQ: '\\"';
+WS: ( ' ' | '\t' | '\r' | '\n') {skip();};
+COMENTARIO: '{' ~('{'|'\n'|'\r'|'}')* '}' {skip();};
+CADEIA_NAO_FECHADA: '"' ( ESC_SEQ | ~('\n'|'"'|'\\') )* '\n';
+COMENTARIO_NAO_FECHA: '{' ~('\n'|'\r'|'}')* '\n';
+ERRO: .;
