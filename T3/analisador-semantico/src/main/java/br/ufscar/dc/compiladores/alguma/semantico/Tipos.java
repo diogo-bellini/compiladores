@@ -1,5 +1,6 @@
 package br.ufscar.dc.compiladores.alguma.semantico;
 
+// Tipos suportados pela linguagem
 public enum Tipos {
     INTEIRO,
     REAL,
@@ -8,5 +9,5 @@ public enum Tipos {
     REGISTRO,
     PONTEIRO,
     ENDERECO,
-    INVALIDO
+    INVALIDO // usado para indicar erro de tipo
 }

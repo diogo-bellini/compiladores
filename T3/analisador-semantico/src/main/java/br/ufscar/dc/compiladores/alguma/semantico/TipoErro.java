@@ -1,5 +1,6 @@
 package br.ufscar.dc.compiladores.alguma.semantico;
 
+// Tipos de erros semânticos possíveis
 public enum TipoErro {
     IDENTIFICADOR_REPETIDO,
     TIPO_NAO_DECLARADO,
