@@ -156,15 +156,36 @@ public class Semantico extends LinguagemAlgoritmicaBaseVisitor<Void> {
     public Void visitParametro(LinguagemAlgoritmicaParser.ParametroContext ctx) {
         TabelaDeSimbolos escopoAtual = escopos.obterEscopoAtual();
         Tipos tipo = obterTipo(ctx.tipo_estendido());
-
         for (var ident : ctx.identificador()) {
-            String nome = ident.getText();
-
+            String nome = ident.IDENT(0).getText();
             if (escopoAtual.existe(nome)) {
                 SemanticoUtils.adicionarErro(ident.start, TipoErro.IDENTIFICADOR_REPETIDO);
-            } else {
-                escopoAtual.inserir(nome, tipo, Categoria.PARAMETRO);
+                continue;
             }
+
+            EntradaTabelaDeSimbolos entrada = new EntradaTabelaDeSimbolos();
+            entrada.nome = nome;
+            entrada.tipo = tipo;
+            entrada.categoria = Categoria.PARAMETRO;
+
+            // ponteiro
+            if (ctx.tipo_estendido().PONTEIRO() != null) {
+                entrada.ehPonteiro = true;
+                entrada.tipoApontado = obterTipo(ctx.tipo_estendido().tipo_basico_ident());
+            }
+
+            // tipo declarado (registro)
+            if (ctx.tipo_estendido().tipo_basico_ident().IDENT() != null) {
+                String nomeTipo = ctx.tipo_estendido().tipo_basico_ident().IDENT().getText();
+                EntradaTabelaDeSimbolos tipoDecl = escopos.buscar(nomeTipo);
+
+                if (tipoDecl != null && tipoDecl.ehRegistro) {
+                    entrada.ehRegistro = true;
+                    entrada.camposRegistro = tipoDecl.camposRegistro;
+                    entrada.nomeTipo = nomeTipo;
+                }
+            }
+            escopoAtual.inserir(entrada);
         }
         return null;
     }
@@ -204,8 +225,16 @@ public class Semantico extends LinguagemAlgoritmicaBaseVisitor<Void> {
                 return null;
             }
 
-            Tipos tipo = obterTipo(ctx.tipo());
-            escopoAtual.inserir(nome, tipo, Categoria.TIPO);
+            EntradaTabelaDeSimbolos entrada = new EntradaTabelaDeSimbolos();
+            entrada.nome = nome;
+            entrada.tipo = obterTipo(ctx.tipo());
+            entrada.categoria = Categoria.TIPO;
+
+            if (ctx.tipo().registro() != null) {
+                entrada.ehRegistro = true;
+                entrada.camposRegistro = criarCamposRegistro(ctx.tipo().registro());
+            }
+            escopoAtual.inserir(entrada);
             return null;
         }
 
@@ -246,6 +275,17 @@ public class Semantico extends LinguagemAlgoritmicaBaseVisitor<Void> {
             if (ctx.tipo().tipo_estendido() != null && ctx.tipo().tipo_estendido().PONTEIRO() != null) {
                 entrada.ehPonteiro = true;
                 entrada.tipoApontado = obterTipo(ctx.tipo().tipo_estendido().tipo_basico_ident());
+            }
+
+            if (ctx.tipo().tipo_estendido() != null && ctx.tipo().tipo_estendido().tipo_basico_ident().IDENT() != null) {
+                String nomeTipo = ctx.tipo().tipo_estendido().tipo_basico_ident().IDENT().getText();
+                EntradaTabelaDeSimbolos tipoDeclarado = escopos.buscar(nomeTipo);
+
+                if (tipoDeclarado != null && tipoDeclarado.ehRegistro) {
+                    entrada.ehRegistro = true;
+                    entrada.camposRegistro = tipoDeclarado.camposRegistro;
+                    entrada.nomeTipo = nomeTipo;
+                }
             }
             escopoAtual.inserir(entrada);
         }
