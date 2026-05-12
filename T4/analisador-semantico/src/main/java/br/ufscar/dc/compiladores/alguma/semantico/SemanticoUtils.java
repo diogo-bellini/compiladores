@@ -1,18 +1,23 @@
 package br.ufscar.dc.compiladores.alguma.semantico;
 
 import org.antlr.v4.runtime.Token;
-
 import java.util.ArrayList;
 import java.util.List;
 
 // Classe utilitária para verificação de tipos e registro de erros semânticos
 public class SemanticoUtils {
+    // Lista global que armazena as mensagens de erro detectadas durante a análise
     public static List<String> errosSemanticos = new ArrayList<String>();
 
     // Adiciona erro semântico formatado com linha e descrição
     public static void adicionarErro(Token token, TipoErro tipoErro) {
         adicionarErro(token, tipoErro, token.getText());
     }
+
+    /* 
+     * Centraliza a formatação das mensagens de erro.
+     * Mapeia o enum TipoErro para strings amigáveis ao usuário, incluindo o número da linha.
+     */
     public static void adicionarErro(Token token, TipoErro tipoErro, String nome) {
         int linha = token.getLine();
         String erroMessage = String.format("Linha %d: ", linha);
@@ -39,23 +44,24 @@ public class SemanticoUtils {
         errosSemanticos.add(erroMessage);
     }
 
-    // Verifica se ambos os tipos são numéricos
+    // Verifica se ambos os tipos pertencem ao subconjunto numérico (INTEIRO ou REAL)
     public static boolean tiposNumericos(Tipos t1, Tipos t2) {
         return (t1 == Tipos.INTEIRO || t1 == Tipos.REAL) && (t2 == Tipos.INTEIRO || t2 == Tipos.REAL);
     }
 
-    // Verifica compatibilidade geral de tipos
+    // Verifica compatibilidade geral de tipos, permitindo coerção de INTEIRO para REAL
     public static boolean tiposCompativeis(Tipos t1, Tipos t2) {
         if (t1 == Tipos.INVALIDO || t2 == Tipos.INVALIDO) return true;
         if (tiposNumericos(t1, t2)) return true;
         return t1 == t2;
     }
 
+    // Valida se os tipos são exatamente iguais (sem promoção automática)
     public static boolean tiposCompativeisEstritos(Tipos esperado, Tipos recebido) {
         return esperado == recebido;
     }
 
-    // Promoção numérica (inteiro -> real)
+    // Promoção numérica (inteiro -> real): define o tipo resultante de uma operação aritmética
     public static Tipos promoverNumerico(Tipos t1, Tipos t2) {
         if (!tiposNumericos(t1, t2)) {
             return Tipos.INVALIDO;
@@ -66,7 +72,7 @@ public class SemanticoUtils {
         return Tipos.INTEIRO;
     }
 
-    // Combina expressões lógicas (AND/OR)
+    // Combina resultados de expressões lógicas (AND/OR), garantindo que ambos os operandos sejam booleanos
     public static Tipos combinarLogico(Tipos ret, Tipos t) {
         if (ret == null) return t;
         if (ret != Tipos.LOGICO || t != Tipos.LOGICO) {
@@ -75,7 +81,7 @@ public class SemanticoUtils {
         return Tipos.LOGICO;
     }
 
-    // Verificação principal de tipo de expressões
+    // Verificação principal de tipo de expressões: itera sobre os termos da gramática
     public static Tipos verificarTipo(Escopos escopos, LinguagemAlgoritmicaParser.ExpressaoContext ctx) {
         Tipos ret = null;
         for (var tlog : ctx.termo_logico()) {
@@ -88,7 +94,7 @@ public class SemanticoUtils {
         return ret;
     }
 
-    // Avalia termo lógico (AND implícito entre fatores)
+    // Avalia termo lógico (iteração sobre fatores logicos na gramática)
     public static Tipos verificarTipo(Escopos escopos, LinguagemAlgoritmicaParser.Termo_logicoContext ctx) {
         Tipos ret = null;
 
@@ -99,17 +105,17 @@ public class SemanticoUtils {
             ret = combinarLogico(ret, t);
 
             if (ret == Tipos.INVALIDO) {
-                return ret; // interrompe em caso de erro
+                return ret; // interrompe em caso de erro semântico
             }
         }
         return ret;
     }
 
-    // Avalia fator lógico (possível uso de NOT)
+    // Avalia fator lógico (trata o operador unário de negação 'nao')
     public static Tipos verificarTipo(Escopos escopos, LinguagemAlgoritmicaParser.Fator_logicoContext ctx) {
         Tipos t = verificarTipo(escopos, ctx.parcela_logica());
 
-        // NOT só é válido para expressões lógicas
+        // NOT só é válido para expressões do tipo LOGICO
         if (ctx.NAO() != null) {
             if (t != Tipos.LOGICO) {
                 return Tipos.INVALIDO;
@@ -118,7 +124,7 @@ public class SemanticoUtils {
         return t;
     }
 
-    // Parcela lógica: booleano literal ou expressão relacional
+    // Parcela lógica: resolve literais (verdadeiro/falso) ou delega para expressões relacionais
     public static Tipos verificarTipo(Escopos escopos, LinguagemAlgoritmicaParser.Parcela_logicaContext ctx) {
         if (ctx.VERDADEIRO() != null || ctx.FALSO() != null) {
             return Tipos.LOGICO;
@@ -126,11 +132,11 @@ public class SemanticoUtils {
         return verificarTipo(escopos, ctx.exp_relacional());
     }
 
-    // Avalia expressões relacionais (>, <, =, etc.)
+    // Avalia expressões relacionais (>, <, =, etc.) e define o tipo resultante como LOGICO
     public static Tipos verificarTipo(Escopos escopos, LinguagemAlgoritmicaParser.Exp_relacionalContext ctx) {
         Tipos t1 = verificarTipo(escopos, ctx.exp_aritmetica(0));
 
-        // Caso sem operador relacional (apenas expressão aritmética)
+        // Se não houver operador relacional, retorna o tipo da própria expressão aritmética
         if (ctx.op_relacional() == null) {
             return t1;
         }
@@ -138,7 +144,7 @@ public class SemanticoUtils {
         Tipos t2 = verificarTipo(escopos, ctx.exp_aritmetica(1));
         String op = ctx.op_relacional().getText();
 
-        // Operadores relacionais exigem tipos numéricos
+        // Operadores de ordem (<, >, etc) exigem operandos numéricos
         if (op.equals(">") || op.equals("<") || op.equals(">=") || op.equals("<=")) {
             if (!tiposNumericos(t1, t2)) {
                 return Tipos.INVALIDO;
@@ -146,7 +152,7 @@ public class SemanticoUtils {
             return Tipos.LOGICO;
         }
 
-        // Igualdade permite tipos compatíveis
+        // Operadores de igualdade permitem tipos compatíveis (ex: Inteiro e Real)
         if (op.equals("=") || op.equals("<>")) {
             if (!tiposCompativeis(t1, t2)) {
                 return Tipos.INVALIDO;
@@ -156,7 +162,7 @@ public class SemanticoUtils {
         return Tipos.INVALIDO;
     }
 
-    // Avalia expressão aritmética (+ e -)
+    // Avalia expressão aritmética lidando com precedência de adição/subtração e promoção de tipos
     public static Tipos verificarTipo(Escopos escopos, LinguagemAlgoritmicaParser.Exp_aritmeticaContext ctx) {
         Tipos ret = null;
 
@@ -164,13 +170,13 @@ public class SemanticoUtils {
             Tipos t = verificarTipo(escopos, termo);
 
             if (ret == null) {
-                ret = t; // primeiro termo define o tipo inicial
+                ret = t; // primeiro termo define o tipo base
             } else {
-                // concatenação de literais (caso permitido na linguagem)
+                // Suporte para concatenação de LITERAL se ambos forem strings
                 if (ret == Tipos.LITERAL && t == Tipos.LITERAL) {
                     continue;
                 }
-                // promoção numérica (int -> real)
+                // Promoção de tipos numéricos em operações aritméticas
                 else if (tiposNumericos(ret, t)) {
                     ret = promoverNumerico(ret, t);
                 }
@@ -182,7 +188,7 @@ public class SemanticoUtils {
         return ret;
     }
 
-    // Avalia termo (* e /)
+    // Avalia termo (multiplicação e divisão) garantindo operandos numéricos
     public static Tipos verificarTipo(Escopos escopos, LinguagemAlgoritmicaParser.TermoContext ctx) {
         Tipos ret = null;
 
@@ -192,7 +198,7 @@ public class SemanticoUtils {
             if (ret == null) {
                 ret = t;
             } else {
-                // multiplicação/divisão só entre numéricos
+                // Multiplicação/divisão inválida se um dos operandos não for numérico
                 if (!tiposNumericos(ret, t)) {
                     return Tipos.INVALIDO;
                 }
@@ -202,7 +208,7 @@ public class SemanticoUtils {
         return ret;
     }
 
-    // Avalia fator (% ou outros agrupamentos)
+    // Avalia fator, tratando agrupamentos de parcelas
     public static Tipos verificarTipo(Escopos escopos, LinguagemAlgoritmicaParser.FatorContext ctx) {
         Tipos ret = null;
 
@@ -221,7 +227,7 @@ public class SemanticoUtils {
         return ret;
     }
 
-    // Decide entre parcela unária ou não unária
+    // Decide entre parcela unária (com sinal) ou não unária
     public static Tipos verificarTipo(Escopos escopos, LinguagemAlgoritmicaParser.ParcelaContext ctx) {
         if (ctx.parcela_unario() != null) {
             return verificarTipo(escopos, ctx.parcela_unario());
@@ -230,14 +236,14 @@ public class SemanticoUtils {
         }
     }
 
-    // Avalia parcela unária (variáveis, números, expressões)
+    // Avalia parcela unária: busca identificadores nos escopos e valida chamadas de função
     public static Tipos verificarTipo(Escopos escopos, LinguagemAlgoritmicaParser.Parcela_unarioContext ctx) {
         if (ctx.identificador() != null) {
             LinguagemAlgoritmicaParser.IdentificadorContext identCtx = ctx.identificador();
             String nomeBase = identCtx.IDENT(0).getText();
             EntradaTabelaDeSimbolos e = escopos.buscar(nomeBase);
 
-            // variável não declarada
+            // Valida se o identificador base (ex: 'pessoa' em 'pessoa.idade') existe
             if (e == null) {
                 SemanticoUtils.adicionarErro(identCtx.start, TipoErro.IDENTIFICADOR_NAO_DECLARADO, identCtx.getText());
                 return Tipos.INVALIDO;
@@ -245,10 +251,11 @@ public class SemanticoUtils {
 
             EntradaTabelaDeSimbolos atual = e;
 
+            // Percorre acessos a registros/campos (ex: registro.campo1.campo2)
             for (int i = 1; i < identCtx.IDENT().size(); i++) {
                 String campo = identCtx.IDENT(i).getText();
 
-                // não é registro mas tentou acessar campo
+                // Verifica se o nível atual permite acesso a campos
                 if (!atual.ehRegistro || atual.camposRegistro == null) {
                     SemanticoUtils.adicionarErro(identCtx.start, TipoErro.IDENTIFICADOR_NAO_DECLARADO, identCtx.getText());
                     return Tipos.INVALIDO;
@@ -256,7 +263,7 @@ public class SemanticoUtils {
 
                 EntradaTabelaDeSimbolos prox = atual.camposRegistro.buscar(campo);
 
-                // campo não existe (CASO CRÍTICO: Preco vs preco)
+                // Valida existência do campo dentro da tabela de símbolos do registro
                 if (prox == null) {
                     SemanticoUtils.adicionarErro(identCtx.start, TipoErro.IDENTIFICADOR_NAO_DECLARADO, identCtx.getText());
                     return Tipos.INVALIDO;
@@ -268,6 +275,7 @@ public class SemanticoUtils {
             return atual.tipo;
         }
 
+        // Trata chamadas de funções identificadas apenas pelo nome
         if (ctx.IDENT() != null) {
             String nome = ctx.IDENT().getText();
             EntradaTabelaDeSimbolos e = escopos.buscar(nome);
@@ -277,6 +285,7 @@ public class SemanticoUtils {
                 return Tipos.INVALIDO;
             }
 
+            // Se houver parâmetros entre parênteses, valida quantidade e tipos
             if (ctx.expressao() != null && !ctx.expressao().isEmpty()) {
                 List<Tipos> tiposPassados = new ArrayList<>();
 
@@ -300,14 +309,11 @@ public class SemanticoUtils {
             return e.tipo;
         }
 
-        if (ctx.NUM_INT() != null) {
-            return Tipos.INTEIRO;
-        }
+        // Retorna tipos básicos para literais numéricos
+        if (ctx.NUM_INT() != null) return Tipos.INTEIRO;
+        if (ctx.NUM_REAL() != null) return Tipos.REAL;
 
-        if (ctx.NUM_REAL() != null) {
-            return Tipos.REAL;
-        }
-
+        // Trata expressões entre parênteses recursivamente
         if (ctx.expressao() != null) {
             return verificarTipo(escopos, ctx.expressao(0));
         }
@@ -315,13 +321,13 @@ public class SemanticoUtils {
         return Tipos.INVALIDO;
     }
 
-    // Avalia parcela não unária (strings e endereços)
+    // Avalia parcela não unária: strings (CADEIA) e referências de endereço (&)
     public static Tipos verificarTipo(Escopos escopos, LinguagemAlgoritmicaParser.Parcela_nao_unarioContext ctx) {
         if (ctx.CADEIA() != null) {
             return Tipos.LITERAL;
         }
 
-        // Identificador usado como endereço
+        // Identificador usado como endereço (referência de ponteiro)
         if (ctx.identificador() != null) {
             String nome = ctx.identificador().getText();
             EntradaTabelaDeSimbolos e = escopos.buscar(nome);
@@ -335,6 +341,7 @@ public class SemanticoUtils {
         return Tipos.INVALIDO;
     }
     
+    // Método auxiliar para obter o tipo de um identificador composto (com campos de registro)
     public static Tipos verificarTipo(Escopos escopos, LinguagemAlgoritmicaParser.IdentificadorContext ctx) {
         String nomeBase = ctx.IDENT(0).getText();
         EntradaTabelaDeSimbolos e = escopos.buscar(nomeBase);
@@ -346,7 +353,7 @@ public class SemanticoUtils {
 
         EntradaTabelaDeSimbolos atual = e;
         
-        // Percorre os campos do registro
+        // Percorre os campos do registro navegando pelas tabelas de símbolos aninhadas
         for (int i = 1; i < ctx.IDENT().size(); i++) {
             String nomeCampo = ctx.IDENT(i).getText();
             
