@@ -10,26 +10,32 @@ public class TabelaDeSimbolos {
         tabelaDeSimbolos = new HashMap<>();
     }
 
-    // Insere um novo identificador na tabela
+    // inserção simples
     public void inserir(String nome, Tipos tipo, Categoria categoria) {
-        EntradaTabelaDeSimbolos instancia = new EntradaTabelaDeSimbolos();
-        instancia.nome = nome;
-        instancia.tipo = tipo;
-        instancia.categoria = categoria;
-        tabelaDeSimbolos.put(nome, instancia);
+
+        EntradaTabelaDeSimbolos entrada = new EntradaTabelaDeSimbolos();
+        entrada.nome = nome;
+        entrada.tipo = tipo;
+        entrada.categoria = categoria;
+        tabelaDeSimbolos.put(nome, entrada);
     }
 
-    // Busca um identificador
+    // inserção completa
+    public void inserir(EntradaTabelaDeSimbolos entrada) {
+        tabelaDeSimbolos.put(entrada.nome, entrada);
+    }
+
+    // busca
     public EntradaTabelaDeSimbolos buscar(String nome) {
         return tabelaDeSimbolos.get(nome);
     }
 
-    // Verifica se já existe no escopo
+    // existe no escopo
     public boolean existe(String nome) {
         return tabelaDeSimbolos.containsKey(nome);
     }
 
-    // Retorna o tipo associado ao identificador
+    // retorna tipo
     public Tipos verificarTipo(String nome) {
         return tabelaDeSimbolos.get(nome).tipo;
     }

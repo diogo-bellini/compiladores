@@ -2,19 +2,32 @@
 
 Este projeto foi desenvolvido para a disciplina de Compiladores da UFSCar.
 
-O objetivo é implementar um analisador semantico que detecta 4 tipos de erros:
-- Identificador (variável, constante, procedimento, função, tipo) já declarado anteriormente no escopo.
-  - O mesmo identificador não pode ser usado novamente no mesmo escopo mesmo que para categorias diferentes.
-- Tipo não declarado
-- Identificador (variável, constante, procedimento, função) não declarado
-- Atribuição não compatível com o tipo declarado
+O objetivo é implementar aprimorar o analisador semantico T3 detectando 5 novos tipos de erros:
+- Identificador (variável, constante, procedimento, função, tipo) já declarado anteriormente no escopo, mas agora envolvendo também ponteiros, registros, funções
+  - O mesmo identificador não pode ser usado novamente no mesmo escopo mesmo que para categorias diferentes
+
+- Identificador (variável, constante, procedimento, função) não declarado, mas agora envolvendo também ponteiros, registros, funções
+
+- Incompatibilidade entre argumentos e parâmetros formais (número, ordem e tipo) na chamada de um procedimento ou uma função
+  - A quantidade e tipo dos argumentos deve ser exata
+    - endereço → ponteiro
+    - real → real
+    - inteiro → inteiro
+    - literal → literal
+    - logico → logico
+    - registro → registro (com mesmo nome de tipo)
+
+- Atribuição não compatível com o tipo declarado, agora envolvendo ponteiros e registros
   - Atribuições possíveis
-    ponteiro ← endereço
-    (real | inteiro) ← (real | inteiro)
-    literal ← literal
-    logico ← logico
-    registro ← registro (com mesmo nome de tipo)
+    - ponteiro ← endereço
+    - (real | inteiro) ← (real | inteiro)
+    - literal ← literal
+    - logico ← logico
+    - registro ← registro (com mesmo nome de tipo)
+
   - As mesmas restrições são válidas para expressões, por exemplo, ao tentar combinar um literal com um logico (como em literal + logico) deve dar tipo_indefinido e inviabilizar a atribuição
+
+- Uso do comando 'retorne' em um escopo não permitido
 
 
 ---
@@ -52,4 +65,4 @@ java -jar target/analisador-semantico-1.0-SNAPSHOT-jar-with-dependencies.jar <ar
 ```
 Os possíveis erros semanticos vão ser salvos no arquivo de saída.
 
-Exemplos de entradas estão em [Entradas](https://github.com/diogo-bellini/compiladores/tree/main/casos-de-teste/3.casos_teste_t3/entrada) e suas saídas esperadas em [Saídas](https://github.com/diogo-bellini/compiladores/tree/main/casos-de-teste/3.casos_teste_t3/saida).
+Exemplos de entradas estão em [Entradas](https://github.com/diogo-bellini/compiladores/tree/main/casos-de-teste/4.casos_teste_t4/entrada) e suas saídas esperadas em [Saídas](https://github.com/diogo-bellini/compiladores/tree/main/casos-de-teste/4.casos_teste_t4/saida).
