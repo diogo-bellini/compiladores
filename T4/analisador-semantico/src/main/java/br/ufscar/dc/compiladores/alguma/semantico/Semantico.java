@@ -1,7 +1,7 @@
 package br.ufscar.dc.compiladores.alguma.semantico;
 
 // Classe responsável pela análise semântica utilizando o padrão Visitor
-public class Semantico extends LinguagemAlgoritmicaBaseVisitor<Void> {
+public class Semantico extends LinguagemAlgoritmicaBaseVisitor<Void>{
 
     Escopos escopos = new Escopos(); // controla os escopos ativos
     Tipos tipoRetornoAtual = null;   // usado para validar "retorne" em funções
@@ -49,7 +49,7 @@ public class Semantico extends LinguagemAlgoritmicaBaseVisitor<Void> {
     }
 
     // Tipo de constantes literais
-    private Tipos obterTipo(LinguagemAlgoritmicaParser.Valor_constanteContext ctx) {
+    private Tipos obterTipo(LinguagemAlgoritmicaParser.Valor_constanteContext ctx){
         if (ctx.NUM_INT() != null) return Tipos.INTEIRO;
         if (ctx.NUM_REAL() != null) return Tipos.REAL;
         if (ctx.CADEIA() != null) return Tipos.LITERAL;
@@ -98,7 +98,8 @@ public class Semantico extends LinguagemAlgoritmicaBaseVisitor<Void> {
         // Verifica duplicidade no escopo atual
         if (escopoAtual.existe(nome)) {
             SemanticoUtils.adicionarErro(ctx.IDENT().getSymbol(), TipoErro.IDENTIFICADOR_REPETIDO);
-        } else {
+        }
+        else {
             if (ctx.PROCEDIMENTO() != null) {
                 escopoAtual.inserir(nome, Tipos.INVALIDO, Categoria.PROCEDIMENTO);
             }
@@ -115,15 +116,7 @@ public class Semantico extends LinguagemAlgoritmicaBaseVisitor<Void> {
             visitParametros(ctx.parametros());
         }
 
-        // Declarações locais dentro da função/procedimento
-        for (var declLocal : ctx.declaracao_local()) {
-            visitDeclaracao_local(declLocal);
-        }
-
-        // Comandos do corpo da função/procedimento
-        for (var cmd : ctx.cmd()) {
-            visitCmd(cmd);
-        }
+        super.visitDeclaracao_global(ctx);
 
         escopos.deletarEscopoAtual(); // sai do escopo
         tipoRetornoAtual = null;
@@ -173,177 +166,7 @@ public class Semantico extends LinguagemAlgoritmicaBaseVisitor<Void> {
             return null;
         }
 
-        // Declaração de tipo definido pelo usuário
-        if (ctx.TIPO() != null) {
-            TabelaDeSimbolos escopoAtual = escopos.obterEscopoAtual();
-            String nome = ctx.IDENT().getText();
-
-            if (escopoAtual.existe(nome)) {
-                SemanticoUtils.adicionarErro(ctx.IDENT().getSymbol(), TipoErro.IDENTIFICADOR_REPETIDO);
-                return null;
-            }
-
-            Tipos tipo = obterTipo(ctx.tipo());
-            escopoAtual.inserir(nome, tipo, Categoria.TIPO);
-            return null;
-        }
-
-        // Caso DECLARE variavel — delega explicitamente
-        if (ctx.variavel() != null) {
-            visitVariavel(ctx.variavel());
-        }
-
-        return null;
-    }
-
-    // Insere variáveis no escopo com seu tipo
-    @Override
-    public Void visitVariavel(LinguagemAlgoritmicaParser.VariavelContext ctx) {
-        TabelaDeSimbolos escopoAtual = escopos.obterEscopoAtual();
-        Tipos tipo = obterTipo(ctx.tipo());
-
-        for (var ident : ctx.identificador()) {
-            String nome = ident.IDENT(0).getText();
-
-            if (escopoAtual.existe(nome)) {
-                SemanticoUtils.adicionarErro(ident.start, TipoErro.IDENTIFICADOR_REPETIDO);
-            } else {
-                escopoAtual.inserir(nome, tipo, Categoria.VARIAVEL);
-            }
-        }
-        return null;
-    }
-
-    // Visita o corpo do algoritmo: declarações locais e comandos
-    @Override
-    public Void visitCorpo(LinguagemAlgoritmicaParser.CorpoContext ctx) {
-        for (var declLocal : ctx.declaracao_local()) {
-            visitDeclaracao_local(declLocal);
-        }
-        for (var cmd : ctx.cmd()) {
-            visitCmd(cmd);
-        }
-        return null;
-    }
-
-    // Despacha para o visitor correto conforme o tipo de comando
-    @Override
-    public Void visitCmd(LinguagemAlgoritmicaParser.CmdContext ctx) {
-        if (ctx.cmdAtribuicao() != null) return visitCmdAtribuicao(ctx.cmdAtribuicao());
-        if (ctx.cmdLeia() != null)       return visitCmdLeia(ctx.cmdLeia());
-        if (ctx.cmdEscreva() != null)    return visitCmdEscreva(ctx.cmdEscreva());
-        if (ctx.cmdSe() != null)         return visitCmdSe(ctx.cmdSe());
-        if (ctx.cmdCaso() != null)       return visitCmdCaso(ctx.cmdCaso());
-        if (ctx.cmdPara() != null)       return visitCmdPara(ctx.cmdPara());
-        if (ctx.cmdEnquanto() != null)   return visitCmdEnquanto(ctx.cmdEnquanto());
-        if (ctx.cmdChamada() != null)    return visitCmdChamada(ctx.cmdChamada());
-        if (ctx.cmdRetorne() != null)    return visitCmdRetorne(ctx.cmdRetorne());
-        return null;
-    }
-
-    // Verifica se os identificadores lidos estão declarados
-    @Override
-    public Void visitCmdLeia(LinguagemAlgoritmicaParser.CmdLeiaContext ctx) {
-        for (var ident : ctx.identificador()) {
-            String nome = ident.IDENT(0).getText();
-            if (escopos.buscar(nome) == null) {
-                SemanticoUtils.adicionarErro(ident.start, TipoErro.IDENTIFICADOR_NAO_DECLARADO);
-            }
-        }
-        return null;
-    }
-
-    // Verifica tipos das expressões escritas
-    @Override
-    public Void visitCmdEscreva(LinguagemAlgoritmicaParser.CmdEscrevaContext ctx) {
-        for (var expr : ctx.expressao()) {
-            SemanticoUtils.verificarTipo(escopos, expr);
-        }
-        return null;
-    }
-
-    // Verifica condição e visita ramos do se/senao
-    @Override
-    public Void visitCmdSe(LinguagemAlgoritmicaParser.CmdSeContext ctx) {
-        SemanticoUtils.verificarTipo(escopos, ctx.expressao());
-        for (var cmd : ctx.cmd()) {
-            visitCmd(cmd);
-        }
-        return null;
-    }
-
-    // Verifica expressão do caso e visita seleções e senao
-    @Override
-    public Void visitCmdCaso(LinguagemAlgoritmicaParser.CmdCasoContext ctx) {
-        SemanticoUtils.verificarTipo(escopos, ctx.exp_aritmetica());
-        if (ctx.selecao() != null) {
-            visitSelecao(ctx.selecao());
-        }
-        // Comandos do senao do caso
-        for (var cmd : ctx.cmd()) {
-            visitCmd(cmd);
-        }
-        return null;
-    }
-
-    // Visita cada item da seleção e seus comandos
-    @Override
-    public Void visitSelecao(LinguagemAlgoritmicaParser.SelecaoContext ctx) {
-        for (var item : ctx.item_selecao()) {
-            for (var cmd : item.cmd()) {
-                visitCmd(cmd);
-            }
-        }
-        return null;
-    }
-
-    // Verifica variável de controle e limites do para
-    @Override
-    public Void visitCmdPara(LinguagemAlgoritmicaParser.CmdParaContext ctx) {
-        String nome = ctx.IDENT().getText();
-        if (escopos.buscar(nome) == null) {
-            SemanticoUtils.adicionarErro(ctx.IDENT().getSymbol(), TipoErro.IDENTIFICADOR_NAO_DECLARADO);
-        }
-        SemanticoUtils.verificarTipo(escopos, ctx.exp_aritmetica(0));
-        SemanticoUtils.verificarTipo(escopos, ctx.exp_aritmetica(1));
-        for (var cmd : ctx.cmd()) {
-            visitCmd(cmd);
-        }
-        return null;
-    }
-
-    // Verifica condição do enquanto e seus comandos
-    @Override
-    public Void visitCmdEnquanto(LinguagemAlgoritmicaParser.CmdEnquantoContext ctx) {
-        SemanticoUtils.verificarTipo(escopos, ctx.expressao());
-        for (var cmd : ctx.cmd()) {
-            visitCmd(cmd);
-        }
-        return null;
-    }
-
-    // Verifica se o procedimento/função chamada está declarada
-    @Override
-    public Void visitCmdChamada(LinguagemAlgoritmicaParser.CmdChamadaContext ctx) {
-        String nome = ctx.IDENT().getText();
-        if (escopos.buscar(nome) == null) {
-            SemanticoUtils.adicionarErro(ctx.IDENT().getSymbol(), TipoErro.IDENTIFICADOR_NAO_DECLARADO);
-        }
-        // Verifica tipos dos argumentos passados
-        for (var expr : ctx.expressao()) {
-            SemanticoUtils.verificarTipo(escopos, expr);
-        }
-        return null;
-    }
-
-    // Verifica tipo do retorne contra o tipo de retorno da função atual
-    @Override
-    public Void visitCmdRetorne(LinguagemAlgoritmicaParser.CmdRetorneContext ctx) {
-        Tipos tipoExpr = SemanticoUtils.verificarTipo(escopos, ctx.expressao());
-        if (tipoRetornoAtual != null && !SemanticoUtils.tiposCompativeis(tipoRetornoAtual, tipoExpr)) {
-            SemanticoUtils.adicionarErro(ctx.start, TipoErro.ATRIBUICAO_NAO_COMPATIVEL);
-        }
-        return null;
+        return super.visitDeclaracao_local(ctx);
     }
 
     // Verificação de atribuição
@@ -375,7 +198,7 @@ public class Semantico extends LinguagemAlgoritmicaBaseVisitor<Void> {
             return null;
         }
 
-        if (tipoExpr == Tipos.ENDERECO) {
+        if (tipoExpr == Tipos.ENDERECO){
             SemanticoUtils.adicionarErro(ctx.start, TipoErro.ATRIBUICAO_NAO_COMPATIVEL);
             return null;
         }
