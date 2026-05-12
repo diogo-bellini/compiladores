@@ -11,21 +11,29 @@ public class SemanticoUtils {
 
     // Adiciona erro semântico formatado com linha e descrição
     public static void adicionarErro(Token token, TipoErro tipoErro) {
+        adicionarErro(token, tipoErro, token.getText());
+    }
+    public static void adicionarErro(Token token, TipoErro tipoErro, String nome) {
         int linha = token.getLine();
-        String text = token.getText();
         String erroMessage = String.format("Linha %d: ", linha);
         switch (tipoErro) {
             case IDENTIFICADOR_NAO_DECLARADO:
-                erroMessage += String.format("identificador %s nao declarado", text);
+                erroMessage += String.format("identificador %s nao declarado", nome);
                 break;
             case ATRIBUICAO_NAO_COMPATIVEL:
-                erroMessage += String.format("atribuicao nao compativel para %s", text);
+                erroMessage += String.format("atribuicao nao compativel para %s", nome);
                 break;
             case TIPO_NAO_DECLARADO:
-                erroMessage += String.format("tipo %s nao declarado", text);
+                erroMessage += String.format("tipo %s nao declarado", nome);
                 break;
             case IDENTIFICADOR_REPETIDO:
-                erroMessage += String.format("identificador %s ja declarado anteriormente", text);
+                erroMessage += String.format("identificador %s ja declarado anteriormente", nome);
+                break;
+            case INCOMPATIBILIDADE_PARAMETROS:
+                erroMessage += String.format("incompatibilidade de parametros na chamada de %s", nome);
+                break;
+            case RETORNE_FORA_FUNCAO:
+                erroMessage += "comando retorne nao permitido nesse escopo";
                 break;
         }
         errosSemanticos.add(erroMessage);
@@ -220,24 +228,36 @@ public class SemanticoUtils {
 
     // Avalia parcela unária (variáveis, números, expressões)
     public static Tipos verificarTipo(Escopos escopos, LinguagemAlgoritmicaParser.Parcela_unarioContext ctx) {
-        // Identificador (variável)
+        // Identificador (variável simples ou acesso a campo de registro)
         if (ctx.identificador() != null) {
-            String nome = ctx.identificador().getText();
-            EntradaTabelaDeSimbolos e = escopos.buscar(nome);
+            LinguagemAlgoritmicaParser.IdentificadorContext identCtx = ctx.identificador();
+            String nomeBase = identCtx.IDENT(0).getText();
+            EntradaTabelaDeSimbolos e = escopos.buscar(nomeBase);
 
             if (e == null) {
-                SemanticoUtils.adicionarErro(ctx.identificador().start, TipoErro.IDENTIFICADOR_NAO_DECLARADO);
+                SemanticoUtils.adicionarErro(identCtx.start, TipoErro.IDENTIFICADOR_NAO_DECLARADO);
                 return Tipos.INVALIDO;
             }
 
-            // uso de ponteiro (& ou similar)
+            // Acesso a campo de registro
+            if (identCtx.IDENT().size() > 1) {
+                String nomeCompleto = identCtx.getText();
+                EntradaTabelaDeSimbolos campo = escopos.buscar(nomeCompleto);
+                if (campo == null) {
+                    SemanticoUtils.adicionarErro(identCtx.start, TipoErro.IDENTIFICADOR_NAO_DECLARADO);
+                    return Tipos.INVALIDO;
+                }
+                return campo.tipo;
+            }
+
+            // uso de ponteiro
             if (ctx.PONTEIRO() != null) {
                 return Tipos.PONTEIRO;
             }
             return e.tipo;
         }
 
-        // Identificador simples (ex: chamada)
+        // Chamada de função em expressão
         if (ctx.IDENT() != null) {
             String nome = ctx.IDENT().getText();
             EntradaTabelaDeSimbolos e = escopos.buscar(nome);

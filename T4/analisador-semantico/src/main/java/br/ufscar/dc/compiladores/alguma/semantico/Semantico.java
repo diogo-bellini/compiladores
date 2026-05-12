@@ -1,10 +1,14 @@
 package br.ufscar.dc.compiladores.alguma.semantico;
 
+import java.util.ArrayList;
+import java.util.List;
+
 // Classe responsável pela análise semântica utilizando o padrão Visitor
-public class Semantico extends LinguagemAlgoritmicaBaseVisitor<Void>{
+public class Semantico extends LinguagemAlgoritmicaBaseVisitor<Void> {
 
     Escopos escopos = new Escopos(); // controla os escopos ativos
     Tipos tipoRetornoAtual = null;   // usado para validar "retorne" em funções
+    boolean dentroFuncao = false;    // controla se estamos dentro de uma função (não procedimento)
 
     // Obtém o tipo a partir de um contexto de tipo
     private Tipos obterTipo(LinguagemAlgoritmicaParser.TipoContext ctx) {
@@ -49,7 +53,7 @@ public class Semantico extends LinguagemAlgoritmicaBaseVisitor<Void>{
     }
 
     // Tipo de constantes literais
-    private Tipos obterTipo(LinguagemAlgoritmicaParser.Valor_constanteContext ctx){
+    private Tipos obterTipo(LinguagemAlgoritmicaParser.Valor_constanteContext ctx) {
         if (ctx.NUM_INT() != null) return Tipos.INTEIRO;
         if (ctx.NUM_REAL() != null) return Tipos.REAL;
         if (ctx.CADEIA() != null) return Tipos.LITERAL;
@@ -98,15 +102,17 @@ public class Semantico extends LinguagemAlgoritmicaBaseVisitor<Void>{
         // Verifica duplicidade no escopo atual
         if (escopoAtual.existe(nome)) {
             SemanticoUtils.adicionarErro(ctx.IDENT().getSymbol(), TipoErro.IDENTIFICADOR_REPETIDO);
-        }
-        else {
+        } else {
             if (ctx.PROCEDIMENTO() != null) {
                 escopoAtual.inserir(nome, Tipos.INVALIDO, Categoria.PROCEDIMENTO);
             }
             if (ctx.FUNCAO() != null) {
                 Tipos tipoRetorno = obterTipo(ctx.tipo_estendido());
                 escopoAtual.inserir(nome, tipoRetorno, Categoria.FUNCAO);
-                tipoRetornoAtual = tipoRetorno; // usado para validar "retorne"
+
+                // usado para validar "retorne"
+                tipoRetornoAtual = tipoRetorno;
+                dentroFuncao = true;
             }
         }
 
@@ -116,10 +122,21 @@ public class Semantico extends LinguagemAlgoritmicaBaseVisitor<Void>{
             visitParametros(ctx.parametros());
         }
 
-        super.visitDeclaracao_global(ctx);
+        // Declarações locais dentro da função/procedimento
+        for (var declLocal : ctx.declaracao_local()) {
+            visitDeclaracao_local(declLocal);
+        }
+
+        // Comandos do corpo da função/procedimento
+        for (var cmd : ctx.cmd()) {
+            visitCmd(cmd);
+        }
 
         escopos.deletarEscopoAtual(); // sai do escopo
+
+        // usado para validar "retorne"
         tipoRetornoAtual = null;
+        dentroFuncao = false;
         return null;
     }
 
@@ -166,40 +183,329 @@ public class Semantico extends LinguagemAlgoritmicaBaseVisitor<Void>{
             return null;
         }
 
-        return super.visitDeclaracao_local(ctx);
+        // Declaração de tipo definido pelo usuário
+        if (ctx.TIPO() != null) {
+            TabelaDeSimbolos escopoAtual = escopos.obterEscopoAtual();
+            String nome = ctx.IDENT().getText();
+
+            if (escopoAtual.existe(nome)) {
+                SemanticoUtils.adicionarErro(ctx.IDENT().getSymbol(), TipoErro.IDENTIFICADOR_REPETIDO);
+                return null;
+            }
+
+            Tipos tipo = obterTipo(ctx.tipo());
+            escopoAtual.inserir(nome, tipo, Categoria.TIPO);
+            return null;
+        }
+
+        // Caso DECLARE variavel — delega explicitamente
+        if (ctx.variavel() != null) {
+            visitVariavel(ctx.variavel());
+        }
+
+        return null;
+    }
+
+    // Insere variáveis no escopo com seu tipo
+    // Detecta conflito com funções/procedimentos declarados globalmente
+    @Override
+    public Void visitVariavel(LinguagemAlgoritmicaParser.VariavelContext ctx) {
+        TabelaDeSimbolos escopoAtual = escopos.obterEscopoAtual();
+        Tipos tipo = obterTipo(ctx.tipo());
+
+        for (var ident : ctx.identificador()) {
+            String nome = ident.IDENT(0).getText();
+
+            if (escopoAtual.existe(nome)) {
+                SemanticoUtils.adicionarErro(ident.start, TipoErro.IDENTIFICADOR_REPETIDO);
+            } else {
+                // Verifica conflito com função/procedimento de escopo externo
+                EntradaTabelaDeSimbolos existente = escopos.buscar(nome);
+                if (existente != null && (existente.categoria == Categoria.FUNCAO || existente.categoria == Categoria.PROCEDIMENTO)) {
+                    SemanticoUtils.adicionarErro(ident.start, TipoErro.IDENTIFICADOR_REPETIDO);
+                } else {
+                    escopoAtual.inserir(nome, tipo, Categoria.VARIAVEL);
+
+                    // Se for registro, insere também os campos
+                    if(ctx.tipo().registro() != null){
+                        inserirCamposRegistro(nome, ctx.tipo().registro(), escopoAtual);
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    // Insere os campos de um registro na tabela
+    private void inserirCamposRegistro(String nomeVar, LinguagemAlgoritmicaParser.RegistroContext reg, TabelaDeSimbolos tabela) {
+        for (var variavel : reg.variavel()) {
+            Tipos tipoCampo = obterTipo(variavel.tipo());
+            for (var identCampo : variavel.identificador()) {
+                String nomeCampo = identCampo.IDENT(0).getText();
+                String chave = nomeVar + "." + nomeCampo;
+                tabela.inserir(chave, tipoCampo, Categoria.VARIAVEL);
+            }
+        }
+    }
+
+    // Visita o corpo do algoritmo: declarações locais e comandos
+    @Override
+    public Void visitCorpo(LinguagemAlgoritmicaParser.CorpoContext ctx) {
+        for (var declLocal : ctx.declaracao_local()) {
+            visitDeclaracao_local(declLocal);
+        }
+        for (var cmd : ctx.cmd()) {
+            visitCmd(cmd);
+        }
+        return null;
+    }
+
+    // Despacha para o visitor correto conforme o tipo de comando
+    @Override
+    public Void visitCmd(LinguagemAlgoritmicaParser.CmdContext ctx) {
+        if (ctx.cmdAtribuicao() != null) return visitCmdAtribuicao(ctx.cmdAtribuicao());
+        if (ctx.cmdLeia() != null)       return visitCmdLeia(ctx.cmdLeia());
+        if (ctx.cmdEscreva() != null)    return visitCmdEscreva(ctx.cmdEscreva());
+        if (ctx.cmdSe() != null)         return visitCmdSe(ctx.cmdSe());
+        if (ctx.cmdCaso() != null)       return visitCmdCaso(ctx.cmdCaso());
+        if (ctx.cmdPara() != null)       return visitCmdPara(ctx.cmdPara());
+        if (ctx.cmdEnquanto() != null)   return visitCmdEnquanto(ctx.cmdEnquanto());
+        if (ctx.cmdChamada() != null)    return visitCmdChamada(ctx.cmdChamada());
+        if (ctx.cmdRetorne() != null)    return visitCmdRetorne(ctx.cmdRetorne());
+        return null;
+    }
+
+    // Verifica se os identificadores lidos estão declarados
+    @Override
+    public Void visitCmdLeia(LinguagemAlgoritmicaParser.CmdLeiaContext ctx) {
+        for (var ident : ctx.identificador()) {
+            String nome = ident.IDENT(0).getText();
+            if (escopos.buscar(nome) == null) {
+                SemanticoUtils.adicionarErro(ident.start, TipoErro.IDENTIFICADOR_NAO_DECLARADO);
+            }
+        }
+        return null;
+    }
+
+    // Verifica tipos das expressões escritas
+    @Override
+    public Void visitCmdEscreva(LinguagemAlgoritmicaParser.CmdEscrevaContext ctx) {
+        for (var expr : ctx.expressao()) {
+            SemanticoUtils.verificarTipo(escopos, expr);
+        }
+        return null;
+    }
+
+    // Verifica condição e visita ramos do se/senao
+    @Override
+    public Void visitCmdSe(LinguagemAlgoritmicaParser.CmdSeContext ctx) {
+        SemanticoUtils.verificarTipo(escopos, ctx.expressao());
+        for (var cmd : ctx.cmd()) {
+            visitCmd(cmd);
+        }
+        return null;
+    }
+
+    // Verifica expressão do caso e visita seleções e senao
+    @Override
+    public Void visitCmdCaso(LinguagemAlgoritmicaParser.CmdCasoContext ctx) {
+        SemanticoUtils.verificarTipo(escopos, ctx.exp_aritmetica());
+        if (ctx.selecao() != null) {
+            visitSelecao(ctx.selecao());
+        }
+        // Comandos do senao do caso
+        for (var cmd : ctx.cmd()) {
+            visitCmd(cmd);
+        }
+        return null;
+    }
+
+    // Visita cada item da seleção e seus comandos
+    @Override
+    public Void visitSelecao(LinguagemAlgoritmicaParser.SelecaoContext ctx) {
+        for (var item : ctx.item_selecao()) {
+            for (var cmd : item.cmd()) {
+                visitCmd(cmd);
+            }
+        }
+        return null;
+    }
+
+    // Verifica variável de controle e limites do para
+    @Override
+    public Void visitCmdPara(LinguagemAlgoritmicaParser.CmdParaContext ctx) {
+        String nome = ctx.IDENT().getText();
+        if (escopos.buscar(nome) == null) {
+            SemanticoUtils.adicionarErro(ctx.IDENT().getSymbol(), TipoErro.IDENTIFICADOR_NAO_DECLARADO);
+        }
+        SemanticoUtils.verificarTipo(escopos, ctx.exp_aritmetica(0));
+        SemanticoUtils.verificarTipo(escopos, ctx.exp_aritmetica(1));
+        for (var cmd : ctx.cmd()) {
+            visitCmd(cmd);
+        }
+        return null;
+    }
+
+    // Verifica condição do enquanto e seus comandos
+    @Override
+    public Void visitCmdEnquanto(LinguagemAlgoritmicaParser.CmdEnquantoContext ctx) {
+        SemanticoUtils.verificarTipo(escopos, ctx.expressao());
+        for (var cmd : ctx.cmd()) {
+            visitCmd(cmd);
+        }
+        return null;
+    }
+
+    // Verifica se o procedimento/função chamada está declarada e a compatibilidade dos parâmetros
+    @Override
+    public Void visitCmdChamada(LinguagemAlgoritmicaParser.CmdChamadaContext ctx) {
+        String nome = ctx.IDENT().getText();
+        EntradaTabelaDeSimbolos e = escopos.buscar(nome);
+
+        if (e == null) {
+            SemanticoUtils.adicionarErro(ctx.IDENT().getSymbol(), TipoErro.IDENTIFICADOR_NAO_DECLARADO);
+            return null;
+        }
+
+        // Busca a declaração global para verificar os parâmetros esperados
+        LinguagemAlgoritmicaParser.Declaracao_globalContext declGlobal = buscarDeclaracaoGlobal(ctx, nome);
+        if (declGlobal != null) {
+            List<Tipos> tiposEsperados = obterTiposParametros(declGlobal);
+            List<Tipos> tiposPassados = new ArrayList<>();
+            for (var expr : ctx.expressao()) {
+                tiposPassados.add(SemanticoUtils.verificarTipo(escopos, expr));
+            }
+
+            // Verifica quantidade e compatibilidade de tipos dos argumentos
+            if (tiposEsperados.size() != tiposPassados.size()) {
+                SemanticoUtils.adicionarErro(ctx.IDENT().getSymbol(), TipoErro.INCOMPATIBILIDADE_PARAMETROS);
+            } else {
+                for (int i = 0; i < tiposEsperados.size(); i++) {
+                    if (!SemanticoUtils.tiposCompativeis(tiposEsperados.get(i), tiposPassados.get(i))) {
+                        SemanticoUtils.adicionarErro(ctx.IDENT().getSymbol(), TipoErro.INCOMPATIBILIDADE_PARAMETROS);
+                        break;
+                    }
+                }
+            }
+        } else {
+            // Declaração não encontrada, apenas verifica as expressões
+            for (var expr : ctx.expressao()) {
+                SemanticoUtils.verificarTipo(escopos, expr);
+            }
+        }
+
+        return null;
+    }
+
+    // Sobe na árvore até o nó programa e busca a declaração global pelo nome
+    private LinguagemAlgoritmicaParser.Declaracao_globalContext buscarDeclaracaoGlobal(LinguagemAlgoritmicaParser.CmdChamadaContext ctx, String nome) {
+        org.antlr.v4.runtime.tree.ParseTree node = ctx;
+        while (node != null && !(node instanceof LinguagemAlgoritmicaParser.ProgramaContext)) {
+            node = node.getParent();
+        }
+        if (node == null) return null;
+
+        LinguagemAlgoritmicaParser.ProgramaContext programa = (LinguagemAlgoritmicaParser.ProgramaContext) node;
+        for (var declLocalGlobal : programa.declaracoes().decl_local_global()) {
+            if (declLocalGlobal.declaracao_global() != null) {
+                LinguagemAlgoritmicaParser.Declaracao_globalContext dg = declLocalGlobal.declaracao_global();
+                if (dg.IDENT().getText().equals(nome)) {
+                    return dg;
+                }
+            }
+        }
+        return null;
+    }
+
+    // Extrai a lista ordenada de tipos dos parâmetros de uma declaração global
+    private List<Tipos> obterTiposParametros(LinguagemAlgoritmicaParser.Declaracao_globalContext ctx) {
+        List<Tipos> tipos = new ArrayList<>();
+        if (ctx.parametros() == null) return tipos;
+
+        for (var parametro : ctx.parametros().parametro()) {
+            Tipos tipo = obterTipo(parametro.tipo_estendido());
+            // Cada identificador no parâmetro conta como um argumento esperado
+            for (var ident : parametro.identificador()) {
+                tipos.add(tipo);
+            }
+        }
+        return tipos;
+    }
+
+    // Verifica tipo do retorne contra o tipo de retorno da função atual
+    // Retorne fora de função (inclusive em procedimento) é erro semântico
+    @Override
+    public Void visitCmdRetorne(LinguagemAlgoritmicaParser.CmdRetorneContext ctx) {
+        if (!dentroFuncao) {
+            SemanticoUtils.adicionarErro(ctx.start, TipoErro.RETORNE_FORA_FUNCAO);
+            return null;
+        }
+        Tipos tipoExpr = SemanticoUtils.verificarTipo(escopos, ctx.expressao());
+        if (tipoRetornoAtual != null && !SemanticoUtils.tiposCompativeis(tipoRetornoAtual, tipoExpr)) {
+            SemanticoUtils.adicionarErro(ctx.start, TipoErro.ATRIBUICAO_NAO_COMPATIVEL);
+        }
+        return null;
     }
 
     // Verificação de atribuição
+    // Trata identificadores simples, acesso a campos de registro e vetores
     @Override
     public Void visitCmdAtribuicao(LinguagemAlgoritmicaParser.CmdAtribuicaoContext ctx) {
-        String nome = ctx.identificador().IDENT(0).getText();
-        EntradaTabelaDeSimbolos e = escopos.buscar(nome);
-
-        // Variável não declarada
+        LinguagemAlgoritmicaParser.IdentificadorContext identCtx = ctx.identificador();
+        String nomeBase = identCtx.IDENT(0).getText();
+        EntradaTabelaDeSimbolos e = escopos.buscar(nomeBase);
+        
+        // Variável base não declarada
         if (e == null) {
-            SemanticoUtils.adicionarErro(ctx.identificador().start, TipoErro.IDENTIFICADOR_NAO_DECLARADO);
+            SemanticoUtils.adicionarErro(identCtx.start, TipoErro.IDENTIFICADOR_NAO_DECLARADO);
             return null;
         }
-
         Tipos tipoVar = e.tipo;
+
+        // Acesso a campo de registro (ex: ponto1.x) — case-sensitive
+        if (identCtx.IDENT().size() > 1) {
+            String nomeCompleto = identCtx.getText();
+            EntradaTabelaDeSimbolos campo = escopos.buscar(nomeCompleto);
+            if (campo == null) {
+                SemanticoUtils.adicionarErro(identCtx.start, TipoErro.IDENTIFICADOR_NAO_DECLARADO, identCtx.getText());
+                return null;
+            }
+            tipoVar = campo.tipo;
+        }
+
         Tipos tipoExpr = SemanticoUtils.verificarTipo(escopos, ctx.expressao());
+        String nome;
+        if (ctx.PONTEIRO() != null) {
+            nome = "^" + ctx.identificador().getText();
+        } else {
+            nome = ctx.identificador().getText();
+        }
 
         // Expressão inválida
         if (tipoExpr == Tipos.INVALIDO) {
-            SemanticoUtils.adicionarErro(ctx.start, TipoErro.ATRIBUICAO_NAO_COMPATIVEL);
+            SemanticoUtils.adicionarErro(ctx.start, TipoErro.ATRIBUICAO_NAO_COMPATIVEL, nome);
             return null;
         }
 
-        // Regras específicas para ponteiros
-        if (tipoVar == Tipos.PONTEIRO) {
-            if (tipoExpr != Tipos.ENDERECO) {
-                SemanticoUtils.adicionarErro(ctx.start, TipoErro.ATRIBUICAO_NAO_COMPATIVEL);
+        // Atribuição via desreferência de ponteiro (^ponteiro <- expr)
+        // O tipo da variável ponteiro deve ser compatível com a expressão
+        if (ctx.PONTEIRO() != null) {
+            if (!SemanticoUtils.tiposCompativeis(tipoVar, tipoExpr)) {
+                SemanticoUtils.adicionarErro(ctx.start, TipoErro.ATRIBUICAO_NAO_COMPATIVEL, nome);
             }
             return null;
         }
 
-        if (tipoExpr == Tipos.ENDERECO){
-            SemanticoUtils.adicionarErro(ctx.start, TipoErro.ATRIBUICAO_NAO_COMPATIVEL);
+        // Atribuição para variável ponteiro (ponteiro <- &var)
+        if (tipoVar == Tipos.PONTEIRO) {
+            if (tipoExpr != Tipos.ENDERECO) {
+                SemanticoUtils.adicionarErro(ctx.start, TipoErro.ATRIBUICAO_NAO_COMPATIVEL, nome);
+            }
+            return null;
+        }
+
+        if (tipoExpr == Tipos.ENDERECO) {
+            SemanticoUtils.adicionarErro(ctx.start, TipoErro.ATRIBUICAO_NAO_COMPATIVEL, nome);
             return null;
         }
 
@@ -213,7 +519,7 @@ public class Semantico extends LinguagemAlgoritmicaBaseVisitor<Void>{
         }
 
         // Caso geral de erro
-        SemanticoUtils.adicionarErro(ctx.start, TipoErro.ATRIBUICAO_NAO_COMPATIVEL);
+        SemanticoUtils.adicionarErro(ctx.start, TipoErro.ATRIBUICAO_NAO_COMPATIVEL, nome);
         return null;
     }
 }
