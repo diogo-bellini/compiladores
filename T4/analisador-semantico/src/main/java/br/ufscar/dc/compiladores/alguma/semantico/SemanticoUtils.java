@@ -232,57 +232,51 @@ public class SemanticoUtils {
 
     // Avalia parcela unária (variáveis, números, expressões)
     public static Tipos verificarTipo(Escopos escopos, LinguagemAlgoritmicaParser.Parcela_unarioContext ctx) {
-        // Identificador (variável simples ou acesso a campo de registro)
         if (ctx.identificador() != null) {
             LinguagemAlgoritmicaParser.IdentificadorContext identCtx = ctx.identificador();
             String nomeBase = identCtx.IDENT(0).getText();
             EntradaTabelaDeSimbolos e = escopos.buscar(nomeBase);
 
+            // variável não declarada
             if (e == null) {
-                SemanticoUtils.adicionarErro(identCtx.start, TipoErro.IDENTIFICADOR_NAO_DECLARADO);
+                SemanticoUtils.adicionarErro(identCtx.start, TipoErro.IDENTIFICADOR_NAO_DECLARADO, identCtx.getText());
                 return Tipos.INVALIDO;
             }
 
-            // Acesso a campo de registro
-            if (identCtx.IDENT().size() > 1) {
-                if (!e.ehRegistro) {
+            EntradaTabelaDeSimbolos atual = e;
+
+            for (int i = 1; i < identCtx.IDENT().size(); i++) {
+                String campo = identCtx.IDENT(i).getText();
+
+                // não é registro mas tentou acessar campo
+                if (!atual.ehRegistro || atual.camposRegistro == null) {
+                    SemanticoUtils.adicionarErro(identCtx.start, TipoErro.IDENTIFICADOR_NAO_DECLARADO, identCtx.getText());
                     return Tipos.INVALIDO;
                 }
-                String campoNome = identCtx.IDENT(1).getText();
-                EntradaTabelaDeSimbolos campo = e.camposRegistro.buscar(campoNome);
-                if (campo == null) {
-                    SemanticoUtils.adicionarErro(identCtx.start, TipoErro.IDENTIFICADOR_NAO_DECLARADO);
+
+                EntradaTabelaDeSimbolos prox = atual.camposRegistro.buscar(campo);
+
+                // campo não existe (CASO CRÍTICO: Preco vs preco)
+                if (prox == null) {
+                    SemanticoUtils.adicionarErro(identCtx.start, TipoErro.IDENTIFICADOR_NAO_DECLARADO, identCtx.getText());
                     return Tipos.INVALIDO;
                 }
-                return campo.tipo;
+
+                atual = prox;
             }
 
-            // uso de ponteiro
-            if (ctx.PONTEIRO() != null) {
-                return Tipos.PONTEIRO;
-            }
-            return e.tipo;
+            return atual.tipo;
         }
 
-        // Chamada de função em expressão
         if (ctx.IDENT() != null) {
-
             String nome = ctx.IDENT().getText();
-
-            EntradaTabelaDeSimbolos e =
-                    escopos.buscar(nome);
+            EntradaTabelaDeSimbolos e = escopos.buscar(nome);
 
             if (e == null) {
-
-                SemanticoUtils.adicionarErro(
-                        ctx.IDENT().getSymbol(),
-                        TipoErro.IDENTIFICADOR_NAO_DECLARADO
-                );
-
+                SemanticoUtils.adicionarErro(ctx.IDENT().getSymbol(), TipoErro.IDENTIFICADOR_NAO_DECLARADO, nome);
                 return Tipos.INVALIDO;
             }
 
-            // chamada de função
             if (ctx.expressao() != null && !ctx.expressao().isEmpty()) {
                 List<Tipos> tiposPassados = new ArrayList<>();
 
@@ -291,28 +285,21 @@ public class SemanticoUtils {
                 }
 
                 List<Tipos> tiposEsperados = e.tiposParametros;
-                boolean erro = false;
 
-                // quantidade diferente
                 if (tiposEsperados.size() != tiposPassados.size()) {
-                    erro = true;
-                }
-                else {
+                    SemanticoUtils.adicionarErro(ctx.IDENT().getSymbol(), TipoErro.INCOMPATIBILIDADE_PARAMETROS, nome);
+                } else {
                     for (int i = 0; i < tiposEsperados.size(); i++) {
                         if (!tiposCompativeisEstritos(tiposEsperados.get(i), tiposPassados.get(i))) {
-                            erro = true;
+                            SemanticoUtils.adicionarErro(ctx.IDENT().getSymbol(), TipoErro.INCOMPATIBILIDADE_PARAMETROS, nome);
                             break;
                         }
                     }
-                }
-                if (erro) {
-                    SemanticoUtils.adicionarErro(ctx.IDENT().getSymbol(), TipoErro.INCOMPATIBILIDADE_PARAMETROS, nome);
                 }
             }
             return e.tipo;
         }
 
-        // Literais numéricos
         if (ctx.NUM_INT() != null) {
             return Tipos.INTEIRO;
         }
@@ -321,10 +308,10 @@ public class SemanticoUtils {
             return Tipos.REAL;
         }
 
-        // Expressão entre parênteses
         if (ctx.expressao() != null) {
             return verificarTipo(escopos, ctx.expressao(0));
         }
+
         return Tipos.INVALIDO;
     }
 
@@ -346,5 +333,36 @@ public class SemanticoUtils {
             return Tipos.ENDERECO;
         }
         return Tipos.INVALIDO;
+    }
+    
+    public static Tipos verificarTipo(Escopos escopos, LinguagemAlgoritmicaParser.IdentificadorContext ctx) {
+        String nomeBase = ctx.IDENT(0).getText();
+        EntradaTabelaDeSimbolos e = escopos.buscar(nomeBase);
+
+        if (e == null) {
+            adicionarErro(ctx.start, TipoErro.IDENTIFICADOR_NAO_DECLARADO, ctx.getText());
+            return Tipos.INVALIDO;
+        }
+
+        EntradaTabelaDeSimbolos atual = e;
+        
+        // Percorre os campos do registro
+        for (int i = 1; i < ctx.IDENT().size(); i++) {
+            String nomeCampo = ctx.IDENT(i).getText();
+            
+            if (!atual.ehRegistro || atual.camposRegistro == null) {
+                adicionarErro(ctx.start, TipoErro.IDENTIFICADOR_NAO_DECLARADO, ctx.getText());
+                return Tipos.INVALIDO;
+            }
+
+            EntradaTabelaDeSimbolos campo = atual.camposRegistro.buscar(nomeCampo);
+            
+            if (campo == null) {
+                adicionarErro(ctx.start, TipoErro.IDENTIFICADOR_NAO_DECLARADO, ctx.getText());
+                return Tipos.INVALIDO;
+            }
+            atual = campo;
+        }
+        return atual.tipo;
     }
 }

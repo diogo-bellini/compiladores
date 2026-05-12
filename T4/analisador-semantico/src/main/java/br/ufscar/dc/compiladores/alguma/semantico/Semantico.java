@@ -332,6 +332,7 @@ public class Semantico extends LinguagemAlgoritmicaBaseVisitor<Void> {
         if (ctx.cmdEnquanto() != null)   return visitCmdEnquanto(ctx.cmdEnquanto());
         if (ctx.cmdChamada() != null)    return visitCmdChamada(ctx.cmdChamada());
         if (ctx.cmdRetorne() != null)    return visitCmdRetorne(ctx.cmdRetorne());
+        if (ctx.cmdFaca() != null)   return visitCmdFaca(ctx.cmdFaca());
         return null;
     }
 
@@ -339,10 +340,7 @@ public class Semantico extends LinguagemAlgoritmicaBaseVisitor<Void> {
     @Override
     public Void visitCmdLeia(LinguagemAlgoritmicaParser.CmdLeiaContext ctx) {
         for (var ident : ctx.identificador()) {
-            String nome = ident.IDENT(0).getText();
-            if (escopos.buscar(nome) == null) {
-                SemanticoUtils.adicionarErro(ident.start, TipoErro.IDENTIFICADOR_NAO_DECLARADO);
-            }
+            SemanticoUtils.verificarTipo(escopos, ident);
         }
         return null;
     }
@@ -416,6 +414,15 @@ public class Semantico extends LinguagemAlgoritmicaBaseVisitor<Void> {
         return null;
     }
 
+    @Override
+    public Void visitCmdFaca(LinguagemAlgoritmicaParser.CmdFacaContext ctx) {
+        for (var cmd : ctx.cmd()) {
+            visitCmd(cmd);
+        }
+        SemanticoUtils.verificarTipo(escopos, ctx.expressao());
+        return null;
+    }
+
     // Verifica se o procedimento/função chamada está declarada e a compatibilidade dos parâmetros
     @Override
     public Void visitCmdChamada(LinguagemAlgoritmicaParser.CmdChamadaContext ctx) {
@@ -455,26 +462,6 @@ public class Semantico extends LinguagemAlgoritmicaBaseVisitor<Void> {
             }
         }
 
-        return null;
-    }
-
-    // Sobe na árvore até o nó programa e busca a declaração global pelo nome
-    private LinguagemAlgoritmicaParser.Declaracao_globalContext buscarDeclaracaoGlobal(LinguagemAlgoritmicaParser.CmdChamadaContext ctx, String nome) {
-        org.antlr.v4.runtime.tree.ParseTree node = ctx;
-        while (node != null && !(node instanceof LinguagemAlgoritmicaParser.ProgramaContext)) {
-            node = node.getParent();
-        }
-        if (node == null) return null;
-
-        LinguagemAlgoritmicaParser.ProgramaContext programa = (LinguagemAlgoritmicaParser.ProgramaContext) node;
-        for (var declLocalGlobal : programa.declaracoes().decl_local_global()) {
-            if (declLocalGlobal.declaracao_global() != null) {
-                LinguagemAlgoritmicaParser.Declaracao_globalContext dg = declLocalGlobal.declaracao_global();
-                if (dg.IDENT().getText().equals(nome)) {
-                    return dg;
-                }
-            }
-        }
         return null;
     }
 
@@ -524,8 +511,8 @@ public class Semantico extends LinguagemAlgoritmicaBaseVisitor<Void> {
 
         // campo de registro
         if (identCtx.IDENT().size() > 1) {
-            if (!e.ehRegistro) {
-                SemanticoUtils.adicionarErro(identCtx.start, TipoErro.IDENTIFICADOR_NAO_DECLARADO);
+            if (!e.ehRegistro || e.camposRegistro == null) {
+                SemanticoUtils.adicionarErro(identCtx.start, TipoErro.IDENTIFICADOR_NAO_DECLARADO, identCtx.getText());
                 return null;
             }
 
@@ -533,7 +520,7 @@ public class Semantico extends LinguagemAlgoritmicaBaseVisitor<Void> {
             EntradaTabelaDeSimbolos campo = e.camposRegistro.buscar(campoNome);
 
             if (campo == null) {
-                SemanticoUtils.adicionarErro(identCtx.start, TipoErro.IDENTIFICADOR_NAO_DECLARADO);
+                SemanticoUtils.adicionarErro(identCtx.start, TipoErro.IDENTIFICADOR_NAO_DECLARADO, identCtx.getText());
                 return null;
             }
             tipoVar = campo.tipo;
