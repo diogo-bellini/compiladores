@@ -241,8 +241,11 @@ public class SemanticoUtils {
 
             // Acesso a campo de registro
             if (identCtx.IDENT().size() > 1) {
-                String nomeCompleto = identCtx.getText();
-                EntradaTabelaDeSimbolos campo = escopos.buscar(nomeCompleto);
+                if (!e.ehRegistro) {
+                    return Tipos.INVALIDO;
+                }
+                String campoNome = identCtx.IDENT(1).getText();
+                EntradaTabelaDeSimbolos campo = e.camposRegistro.buscar(campoNome);
                 if (campo == null) {
                     SemanticoUtils.adicionarErro(identCtx.start, TipoErro.IDENTIFICADOR_NAO_DECLARADO);
                     return Tipos.INVALIDO;
