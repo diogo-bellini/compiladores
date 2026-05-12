@@ -51,6 +51,10 @@ public class SemanticoUtils {
         return t1 == t2;
     }
 
+    public static boolean tiposCompativeisEstritos(Tipos esperado, Tipos recebido) {
+        return esperado == recebido;
+    }
+
     // Promoção numérica (inteiro -> real)
     public static Tipos promoverNumerico(Tipos t1, Tipos t2) {
         if (!tiposNumericos(t1, t2)) {
@@ -262,12 +266,48 @@ public class SemanticoUtils {
 
         // Chamada de função em expressão
         if (ctx.IDENT() != null) {
+
             String nome = ctx.IDENT().getText();
-            EntradaTabelaDeSimbolos e = escopos.buscar(nome);
+
+            EntradaTabelaDeSimbolos e =
+                    escopos.buscar(nome);
 
             if (e == null) {
-                SemanticoUtils.adicionarErro(ctx.IDENT().getSymbol(), TipoErro.IDENTIFICADOR_NAO_DECLARADO);
+
+                SemanticoUtils.adicionarErro(
+                        ctx.IDENT().getSymbol(),
+                        TipoErro.IDENTIFICADOR_NAO_DECLARADO
+                );
+
                 return Tipos.INVALIDO;
+            }
+
+            // chamada de função
+            if (ctx.expressao() != null && !ctx.expressao().isEmpty()) {
+                List<Tipos> tiposPassados = new ArrayList<>();
+
+                for (var expr : ctx.expressao()) {
+                    tiposPassados.add(verificarTipo(escopos, expr));
+                }
+
+                List<Tipos> tiposEsperados = e.tiposParametros;
+                boolean erro = false;
+
+                // quantidade diferente
+                if (tiposEsperados.size() != tiposPassados.size()) {
+                    erro = true;
+                }
+                else {
+                    for (int i = 0; i < tiposEsperados.size(); i++) {
+                        if (!tiposCompativeisEstritos(tiposEsperados.get(i), tiposPassados.get(i))) {
+                            erro = true;
+                            break;
+                        }
+                    }
+                }
+                if (erro) {
+                    SemanticoUtils.adicionarErro(ctx.IDENT().getSymbol(), TipoErro.INCOMPATIBILIDADE_PARAMETROS, nome);
+                }
             }
             return e.tipo;
         }
