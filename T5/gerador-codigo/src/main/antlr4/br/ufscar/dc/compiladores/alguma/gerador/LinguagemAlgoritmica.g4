@@ -80,7 +80,7 @@ FIM_ENQUANTO: 'fim_enquanto';
 IDENT: ('a'..'z'|'A'..'Z') ('a'..'z'|'A'..'Z'|'0'..'9'|'_')*;
 
 CADEIA: '"' ( ESC_SEQ | ~('\n'|'"'|'\\') )* '"';
-ESC_SEQ: '\\"';
+ESC_SEQ: '\\' .;
 WS: ( ' ' | '\t' | '\r' | '\n') {skip();};
 COMENTARIO: '{' ~('{'|'\n'|'\r'|'}')* '}' {skip();};
 CADEIA_NAO_FECHADA: '"' ( ESC_SEQ | ~('\n'|'"'|'\\') )* '\n';
