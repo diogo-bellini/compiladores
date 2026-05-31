@@ -58,7 +58,7 @@ Após a compilação, será gerado um arquivo `.jar` na pasta `target/`.
 
 # ▶️ Execução
 
-Para executar o analisador léxico, utilize, na pasta raíz do projeto, o comando:
+Para executar o analisador semântico, utilize, na pasta raíz do projeto, o comando:
 
 ```bash
 java -jar target/analisador-semantico-1.0-SNAPSHOT-jar-with-dependencies.jar <arquivo_de_entrada.txt> <arquivo_de_saida.txt>
