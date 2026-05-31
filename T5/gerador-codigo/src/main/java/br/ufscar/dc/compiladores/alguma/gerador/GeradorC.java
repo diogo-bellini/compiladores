@@ -1,26 +1,32 @@
 package br.ufscar.dc.compiladores.alguma.gerador;
 
-/**
- * GeradorC — converte a árvore sintática da Linguagem Algorítmica em código C.
- */
+// Classe responsável por percorrer a árvore sintática da linguagem Alguma
+// e gerar o código equivalente em linguagem C.
 public class GeradorC extends LinguagemAlgoritmicaBaseVisitor<Void> {
 
+    // Estrutura utilizada para controle dos escopos e símbolos declarados.
     Escopos escopos = new Escopos();
+
+    // Armazena o código C gerado durante a visita à árvore sintática.
     StringBuilder saida = new StringBuilder();
-    int indentLevel = 0; // Controle de indentação para o corretor automático
+
+    // Controle de indentação para manter o código gerado formatado.
+    int indentLevel = 0;
 
     public String getCodigo() {
         return saida.toString();
     }
 
+    // Retorna a indentação correspondente ao nível atual.
     private String getIndent() {
         return "\t".repeat(Math.max(0, indentLevel));
     }
 
-    // =========================================================
-    // Helpers: geração de expressões (sem efeito colateral)
-    // =========================================================
-
+    // ============================================================
+    // Métodos responsáveis pela geração de expressões.
+    // A estrutura segue a hierarquia definida pela gramática,
+    // preservando precedência e associatividade dos operadores.
+    // ============================================================
     private String gerarExpressao(LinguagemAlgoritmicaParser.ExpressaoContext ctx) {
         StringBuilder sb = new StringBuilder();
         sb.append(gerarTermoLogico(ctx.termo_logico(0)));
@@ -51,15 +57,21 @@ public class GeradorC extends LinguagemAlgoritmicaBaseVisitor<Void> {
     }
 
     private String gerarParcelaLogica(LinguagemAlgoritmicaParser.Parcela_logicaContext ctx) {
-        if (ctx.VERDADEIRO() != null) return "1";
-        if (ctx.FALSO()     != null) return "0";
+        if (ctx.VERDADEIRO() != null) {
+            return "1";
+        }
+        if (ctx.FALSO() != null) {
+            return "0";
+        }
         return gerarExpRelacional(ctx.exp_relacional());
     }
 
     private String gerarExpRelacional(LinguagemAlgoritmicaParser.Exp_relacionalContext ctx) {
         String esquerda = gerarExpAritmetica(ctx.exp_aritmetica(0));
-        if (ctx.op_relacional() == null) return esquerda;
-        String op      = CUtils.operadorC(ctx.op_relacional().getText());
+        if (ctx.op_relacional() == null) {
+            return esquerda;
+        }
+        String op = CUtils.operadorC(ctx.op_relacional().getText());
         String direita = gerarExpAritmetica(ctx.exp_aritmetica(1));
         return esquerda + " " + op + " " + direita;
     }
@@ -117,16 +129,25 @@ public class GeradorC extends LinguagemAlgoritmicaBaseVisitor<Void> {
             sb.append(")");
             return sb.toString();
         }
-        if (ctx.NUM_INT()  != null) return ctx.NUM_INT().getText();
-        if (ctx.NUM_REAL() != null) return ctx.NUM_REAL().getText();
-        if (!ctx.expressao().isEmpty())
+        if (ctx.NUM_INT()  != null) {
+            return ctx.NUM_INT().getText();
+        }
+        if (ctx.NUM_REAL() != null) {
+            return ctx.NUM_REAL().getText();
+        }
+        if (!ctx.expressao().isEmpty()) {
             return "(" + gerarExpressao(ctx.expressao(0)) + ")";
+        }
         return "";
     }
 
     private String gerarParcelaNaoUnario(LinguagemAlgoritmicaParser.Parcela_nao_unarioContext ctx) {
-        if (ctx.identificador() != null) return "&" + gerarIdentificador(ctx.identificador());
-        if (ctx.CADEIA() != null) return ctx.CADEIA().getText();
+        if (ctx.identificador() != null) {
+            return "&" + gerarIdentificador(ctx.identificador());
+        }
+        if (ctx.CADEIA() != null) {
+            return ctx.CADEIA().getText();
+        }
         return "";
     }
 
@@ -136,7 +157,9 @@ public class GeradorC extends LinguagemAlgoritmicaBaseVisitor<Void> {
         for (int i = 1; i < ctx.IDENT().size(); i++) {
             sb.append(".").append(ctx.IDENT(i).getText());
         }
-        if (ctx.dimensao() != null) sb.append(gerarDimensao(ctx.dimensao()));
+        if (ctx.dimensao() != null) {
+            sb.append(gerarDimensao(ctx.dimensao()));
+        }
         return sb.toString();
     }
 
@@ -148,22 +171,22 @@ public class GeradorC extends LinguagemAlgoritmicaBaseVisitor<Void> {
         return sb.toString();
     }
 
-    // =========================================================
-    // Helpers: tipos, formatos e tabela de símbolos
-    // =========================================================
-
     private String especificador(Tipos t) {
         switch (t) {
-            case REAL:    return "%f";
+            case REAL:return "%f";
             case LITERAL: return "%s";
-            default:      return "%d";
+            default: return "%d";
         }
     }
 
+    // Determina o tipo de um identificador consultando a tabela
+    // de símbolos. Também trata acessos a campos de registros.
     private Tipos resolverTipo(LinguagemAlgoritmicaParser.IdentificadorContext ctx) {
         String raiz = ctx.IDENT(0).getText();
         EntradaTabelaDeSimbolos e = escopos.buscar(raiz);
-        if (e == null) return Tipos.INVALIDO;
+        if (e == null) {
+            return Tipos.INVALIDO;
+        }
 
         if (ctx.IDENT().size() > 1) {
             EntradaTabelaDeSimbolos atual = e;
@@ -172,12 +195,16 @@ public class GeradorC extends LinguagemAlgoritmicaBaseVisitor<Void> {
 
                 if (atual.nomeTipo != null) {
                     EntradaTabelaDeSimbolos tipoBase = escopos.buscar(atual.nomeTipo);
-                    if (tipoBase != null) atual = tipoBase;
+                    if (tipoBase != null) {
+                        atual = tipoBase;
+                    }
                 }
 
                 if (atual != null && atual.camposRegistro != null) {
                     atual = atual.camposRegistro.buscar(campo);
-                    if (atual == null) return Tipos.INVALIDO;
+                    if (atual == null) {
+                        return Tipos.INVALIDO;
+                    }
                 } else {
                     return Tipos.INVALIDO;
                 }
@@ -187,28 +214,45 @@ public class GeradorC extends LinguagemAlgoritmicaBaseVisitor<Void> {
         return e.tipo;
     }
 
+    // Infere o formato adequado para utilização em printf.
     private String inferirFormato(LinguagemAlgoritmicaParser.ExpressaoContext ctx) {
-        if (ctx.termo_logico().size() > 1) return "%d";
+        if (ctx.termo_logico().size() > 1) {
+            return "%d";
+        }
         var tl = ctx.termo_logico(0);
-        if (tl.fator_logico().size() > 1) return "%d";
+        if (tl.fator_logico().size() > 1) {
+            return "%d";
+        }
         var fl = tl.fator_logico(0);
-        if (fl.NAO() != null) return "%d";
+        if (fl.NAO() != null) {
+            return "%d";
+        }
         var pl = fl.parcela_logica();
-        if (pl.VERDADEIRO() != null || pl.FALSO() != null) return "%d";
+        if (pl.VERDADEIRO() != null || pl.FALSO() != null) {
+            return "%d";
+        }
         var er = pl.exp_relacional();
-        if (er.op_relacional() != null) return "%d";
+        if (er.op_relacional() != null) {
+            return "%d";
+        }
         var ea = er.exp_aritmetica(0);
         var p0 = ea.termo(0).fator(0).parcela(0);
 
         if (p0.parcela_nao_unario() != null) {
-            if (p0.parcela_nao_unario().CADEIA() != null) return null;
+            if (p0.parcela_nao_unario().CADEIA() != null) {
+                return null;
+            }
             return "%d";
         }
 
         if (p0.parcela_unario() != null) {
             var pu = p0.parcela_unario();
-            if (pu.NUM_REAL() != null) return "%f";
-            if (pu.NUM_INT()  != null) return "%d";
+            if (pu.NUM_REAL() != null) {
+                return "%f";
+            }
+            if (pu.NUM_INT()  != null) {
+                return "%d";
+            }
             if (pu.identificador() != null) {
                 return especificador(resolverTipo(pu.identificador()));
             }
@@ -216,22 +260,40 @@ public class GeradorC extends LinguagemAlgoritmicaBaseVisitor<Void> {
         return "%d";
     }
 
+    // Verifica se a expressão representa uma string, permitindo
+    // decidir entre atribuição comum e uso de strcpy.
     private boolean expressaoEhLiteral(LinguagemAlgoritmicaParser.ExpressaoContext ctx) {
-        if (ctx.termo_logico().size() != 1) return false;
+        if (ctx.termo_logico().size() != 1) {
+            return false;
+        }
         var tl = ctx.termo_logico(0);
-        if (tl.fator_logico().size() != 1) return false;
+        if (tl.fator_logico().size() != 1) {
+            return false;
+        }
         var fl = tl.fator_logico(0);
-        if (fl.NAO() != null) return false;
+        if (fl.NAO() != null) {
+            return false;
+        }
         var pl = fl.parcela_logica();
-        if (pl.VERDADEIRO() != null || pl.FALSO() != null) return false;
+        if (pl.VERDADEIRO() != null || pl.FALSO() != null) {
+            return false;
+        }
         var er = pl.exp_relacional();
-        if (er.op_relacional() != null) return false;
+        if (er.op_relacional() != null) {
+            return false;
+        }
         var ea = er.exp_aritmetica(0);
-        if (ea.termo().size() != 1) return false;
+        if (ea.termo().size() != 1) {
+            return false;
+        }
         var t = ea.termo(0);
-        if (t.fator().size() != 1) return false;
+        if (t.fator().size() != 1) {
+            return false;
+        }
         var f = t.fator(0);
-        if (f.parcela().size() != 1) return false;
+        if (f.parcela().size() != 1) {
+            return false;
+        }
         var p = f.parcela(0);
 
         if (p.parcela_nao_unario() != null && p.parcela_nao_unario().CADEIA() != null)
@@ -245,16 +307,18 @@ public class GeradorC extends LinguagemAlgoritmicaBaseVisitor<Void> {
     }
 
     private boolean expressaoTemNaoExterno(LinguagemAlgoritmicaParser.ExpressaoContext ctx) {
-        if (ctx.termo_logico().size() != 1) return false;
+        if (ctx.termo_logico().size() != 1) {
+            return false;
+        }
         var tl = ctx.termo_logico(0);
-        if (tl.fator_logico().size() != 1) return false;
+        if (tl.fator_logico().size() != 1) {
+            return false;
+        }
         return tl.fator_logico(0).NAO() != null;
     }
 
-    // =========================================================
-    // Programa — ponto de entrada
-    // =========================================================
-
+    // Gera a estrutura principal do programa em C:
+    // bibliotecas, declarações globais e função main.
     @Override
     public Void visitPrograma(LinguagemAlgoritmicaParser.ProgramaContext ctx) {
         saida.append("#include <stdio.h>\n");
@@ -290,21 +354,21 @@ public class GeradorC extends LinguagemAlgoritmicaBaseVisitor<Void> {
         return null;
     }
 
+    // Traduz constantes globais da linguagem Alguma para diretivas #define.
     private void gerarDefine(LinguagemAlgoritmicaParser.Declaracao_localContext ctx) {
-        String nome       = ctx.IDENT().getText();
-        Tipos tipo        = TipoUtils.obterTipo(ctx.tipo_basico());
+        String nome = ctx.IDENT().getText();
+        Tipos tipo = TipoUtils.obterTipo(ctx.tipo_basico());
         String valorTexto = ctx.valor_constante().getText();
 
         escopos.obterEscopoAtual().inserir(nome, tipo, Categoria.CONSTANTE);
         saida.append("#define ").append(nome).append(" ").append(valorTexto).append("\n");
     }
 
-    // =========================================================
-    // Funções e procedimentos (declaracao_global)
-    // =========================================================
-
+    // Gera procedimentos e funções declarados globalmente,
+    // incluindo parâmetros, variáveis locais e comandos internos.
     @Override
     public Void visitDeclaracao_global(LinguagemAlgoritmicaParser.Declaracao_globalContext ctx) {
+        // Cria um novo escopo para armazenar parâmetros e declarações locais.
         escopos.criarEscopo();
 
         boolean ehFuncao = ctx.FUNCAO() != null;
@@ -316,9 +380,9 @@ public class GeradorC extends LinguagemAlgoritmicaBaseVisitor<Void> {
             saida.append("void");
         }
 
-        // Espaçamento estrito requerido pelo corretor automático: "void proc_imprime (char* mensagem){"
         saida.append(" ").append(ctx.IDENT().getText()).append(" (");
 
+        // Geração da lista de parâmetros da função/procedimento.
         if (ctx.parametros() != null) {
             boolean primeiro = true;
             for (var param : ctx.parametros().parametro()) {
@@ -331,11 +395,14 @@ public class GeradorC extends LinguagemAlgoritmicaBaseVisitor<Void> {
                 }
 
                 for (var ident : param.identificador()) {
-                    if (!primeiro) saida.append(",");
+                    if (!primeiro) {
+                        saida.append(",");
+                    }
                     primeiro = false;
 
                     String nome = gerarIdentificador(ident);
 
+                    // Registra o parâmetro na tabela de símbolos do escopo atual.
                     EntradaTabelaDeSimbolos entrada = new EntradaTabelaDeSimbolos();
                     entrada.nome = ident.IDENT(0).getText();
                     entrada.tipo = tipoParam;
@@ -356,26 +423,34 @@ public class GeradorC extends LinguagemAlgoritmicaBaseVisitor<Void> {
         saida.append("){\n");
         indentLevel++;
 
-        for (var declLocal : ctx.declaracao_local()) visitDeclaracao_local(declLocal);
-        for (var cmd : ctx.cmd()) visitCmd(cmd);
+        // Gera declarações locais e comandos do corpo.
+        for (var declLocal : ctx.declaracao_local()) {
+            visitDeclaracao_local(declLocal);
+        }
+        for (var cmd : ctx.cmd()) {
+            visitCmd(cmd);
+        }
 
         indentLevel--;
         saida.append("}\n\n");
+        // Remove o escopo da função/procedimento após finalizar a geração.
         escopos.deletarEscopoAtual();
         return null;
     }
 
-    // =========================================================
-    // Corpo e declarações locais
-    // =========================================================
-
+    // Gera o corpo principal do programa.
     @Override
     public Void visitCorpo(LinguagemAlgoritmicaParser.CorpoContext ctx) {
-        for (var decl : ctx.declaracao_local()) visitDeclaracao_local(decl);
-        for (var cmd  : ctx.cmd())              visitCmd(cmd);
+        for (var decl : ctx.declaracao_local()) {
+            visitDeclaracao_local(decl);
+        }
+        for (var cmd  : ctx.cmd()) {
+            visitCmd(cmd);
+        }
         return null;
     }
 
+    // Gera declarações locais de variáveis, constantes e tipos.
     @Override
     public Void visitDeclaracao_local(LinguagemAlgoritmicaParser.Declaracao_localContext ctx) {
         if (ctx.variavel() != null) {
@@ -383,9 +458,10 @@ public class GeradorC extends LinguagemAlgoritmicaBaseVisitor<Void> {
             return null;
         }
 
+        // Geração de constantes locais.
         if (ctx.CONSTANTE() != null) {
-            String nome       = ctx.IDENT().getText();
-            Tipos tipo        = TipoUtils.obterTipo(ctx.tipo_basico());
+            String nome = ctx.IDENT().getText();
+            Tipos tipo = TipoUtils.obterTipo(ctx.tipo_basico());
             String valorTexto = ctx.valor_constante().getText();
 
             escopos.obterEscopoAtual().inserir(nome, tipo, Categoria.CONSTANTE);
@@ -400,6 +476,7 @@ public class GeradorC extends LinguagemAlgoritmicaBaseVisitor<Void> {
             return null;
         }
 
+        // Geração de tipos definidos pelo usuário (typedef).
         if (ctx.TIPO() != null) {
             String nome = ctx.IDENT().getText();
             Tipos tipo  = TipoUtils.obterTipo(escopos, ctx.tipo());
@@ -409,6 +486,8 @@ public class GeradorC extends LinguagemAlgoritmicaBaseVisitor<Void> {
             entrada.tipo = tipo;
             entrada.categoria = Categoria.TIPO;
 
+            // Armazena os campos do registro para permitir consultas
+            // posteriores durante a geração de código.
             if (tipo == Tipos.REGISTRO) {
                 entrada.ehRegistro = true;
                 entrada.camposRegistro = new TabelaDeSimbolos();
@@ -425,6 +504,7 @@ public class GeradorC extends LinguagemAlgoritmicaBaseVisitor<Void> {
             }
             escopos.obterEscopoAtual().inserir(entrada);
 
+            // Gera a estrutura equivalente em C para registros.
             if (tipo == Tipos.REGISTRO) {
                 saida.append(getIndent()).append("typedef struct {\n");
                 indentLevel++;
@@ -443,6 +523,8 @@ public class GeradorC extends LinguagemAlgoritmicaBaseVisitor<Void> {
         return null;
     }
 
+    // Gera declarações de variáveis e registra seus tipos
+    // na tabela de símbolos do escopo atual.
     @Override
     public Void visitVariavel(LinguagemAlgoritmicaParser.VariavelContext ctx) {
         Tipos tipo = TipoUtils.obterTipo(escopos, ctx.tipo());
@@ -452,6 +534,7 @@ public class GeradorC extends LinguagemAlgoritmicaBaseVisitor<Void> {
             nomeTipoStr = ctx.tipo().tipo_estendido().tipo_basico_ident().IDENT().getText();
         }
 
+        // Insere todas as variáveis declaradas na tabela de símbolos.
         for (var ident : ctx.identificador()) {
             EntradaTabelaDeSimbolos entrada = new EntradaTabelaDeSimbolos();
             entrada.nome = ident.IDENT(0).getText();
@@ -462,9 +545,6 @@ public class GeradorC extends LinguagemAlgoritmicaBaseVisitor<Void> {
             if (tipo == Tipos.REGISTRO) {
                 entrada.ehRegistro = true;
                 entrada.camposRegistro = new TabelaDeSimbolos();
-                // Só popula campos quando o registro é definido inline (ctx.tipo().registro() != null).
-                // Quando o tipo vem de um nome (ex: "declare reg: treg"), registro() é null,
-                // e resolverTipo() já resolve campos via nomeTipo.
                 if (ctx.tipo().registro() != null) {
                     for (var campo : ctx.tipo().registro().variavel()) {
                         Tipos tipoCampo = TipoUtils.obterTipo(escopos, campo.tipo());
@@ -481,9 +561,7 @@ public class GeradorC extends LinguagemAlgoritmicaBaseVisitor<Void> {
             escopos.obterEscopoAtual().inserir(entrada);
         }
 
-        // Tipo nomeado (inclui registro via typedef): gera "NomeTipo var;"
-        // Este bloco DEVE vir antes do check de REGISTRO para evitar gerar struct inline
-        // quando a variável é declarada com um tipo registro nomeado (ex: "declare reg: treg").
+        // Caso a variável utilize um tipo criado por typedef.
         if (nomeTipoStr != null) {
             EntradaTabelaDeSimbolos entrada = escopos.buscar(nomeTipoStr);
             if (entrada != null && entrada.categoria == Categoria.TIPO) {
@@ -495,6 +573,7 @@ public class GeradorC extends LinguagemAlgoritmicaBaseVisitor<Void> {
             }
         }
 
+        // Geração de registros declarados diretamente na variável.
         if (tipo == Tipos.REGISTRO) {
             for (var ident : ctx.identificador()) {
                 saida.append(getIndent()).append("struct {\n");
@@ -508,8 +587,10 @@ public class GeradorC extends LinguagemAlgoritmicaBaseVisitor<Void> {
             return null;
         }
 
+        // Geração de variáveis ponteiro.
         if (tipo == Tipos.PONTEIRO) {
             Tipos tipoBase = TipoUtils.obterTipo(escopos, ctx.tipo().tipo_estendido().tipo_basico_ident());
+            // Geração de variáveis dos tipos básicos da linguagem.
             for (var ident : ctx.identificador()) {
                 saida.append(getIndent()).append(CUtils.tipoC(tipoBase)).append("* ")
                         .append(gerarIdentificador(ident)).append(";\n");
@@ -528,6 +609,7 @@ public class GeradorC extends LinguagemAlgoritmicaBaseVisitor<Void> {
         return null;
     }
 
+    // Gera os campos de um registro (struct em C).
     private void gerarCamposRegistro(LinguagemAlgoritmicaParser.VariavelContext ctx) {
         Tipos tipo = TipoUtils.obterTipo(escopos, ctx.tipo());
         for (var ident : ctx.identificador()) {
@@ -543,10 +625,9 @@ public class GeradorC extends LinguagemAlgoritmicaBaseVisitor<Void> {
         }
     }
 
-    // =========================================================
-    // Comandos
-    // =========================================================
-
+    // Gera comandos de atribuição.
+    // Para literais utiliza strcpy, pois strings não podem
+    // ser copiadas com o operador '=' em C.
     @Override
     public Void visitCmdAtribuicao(LinguagemAlgoritmicaParser.CmdAtribuicaoContext ctx) {
         String destino = (ctx.PONTEIRO() != null ? "*" : "") + gerarIdentificador(ctx.identificador());
@@ -562,6 +643,7 @@ public class GeradorC extends LinguagemAlgoritmicaBaseVisitor<Void> {
         return null;
     }
 
+    // Gera comandos de leitura utilizando scanf.
     @Override
     public Void visitCmdLeia(LinguagemAlgoritmicaParser.CmdLeiaContext ctx) {
         var idents    = ctx.identificador();
@@ -573,6 +655,9 @@ public class GeradorC extends LinguagemAlgoritmicaBaseVisitor<Void> {
             Tipos tipo  = resolverTipo(ident);
             String fmt  = especificador(tipo);
 
+            // Verifica se o identificador foi precedido por '^'
+            // para decidir se deve ser passado diretamente ao scanf
+            // ou através do operador '&'
             boolean temPonteiro = false;
             for (var pt : ponteiros) {
                 if (pt.getSymbol().getTokenIndex() < ident.getStart().getTokenIndex()) {
@@ -583,7 +668,9 @@ public class GeradorC extends LinguagemAlgoritmicaBaseVisitor<Void> {
                             break;
                         }
                     }
-                    if (!tapado) temPonteiro = true;
+                    if (!tapado) {
+                        temPonteiro = true;
+                    }
                 }
             }
 
@@ -598,6 +685,7 @@ public class GeradorC extends LinguagemAlgoritmicaBaseVisitor<Void> {
         return null;
     }
 
+    // Gera comandos de escrita utilizando printf.
     @Override
     public Void visitCmdEscreva(LinguagemAlgoritmicaParser.CmdEscrevaContext ctx) {
         for (var expr : ctx.expressao()) {
@@ -613,10 +701,13 @@ public class GeradorC extends LinguagemAlgoritmicaBaseVisitor<Void> {
         return null;
     }
 
+    // Gera estruturas condicionais if/else.
     @Override
     public Void visitCmdSe(LinguagemAlgoritmicaParser.CmdSeContext ctx) {
         saida.append(getIndent()).append("if (").append(gerarExpressao(ctx.expressao())).append(") {\n");
 
+        // Localiza a posição do bloco senao para separar
+        // corretamente os comandos dos dois blocos.
         int senaoIndex = ctx.SENAO() != null
                 ? ctx.SENAO().getSymbol().getTokenIndex()
                 : Integer.MAX_VALUE;
@@ -638,6 +729,7 @@ public class GeradorC extends LinguagemAlgoritmicaBaseVisitor<Void> {
         return null;
     }
 
+    // Gera estruturas de seleção utilizando switch/case.
     @Override
     public Void visitCmdCaso(LinguagemAlgoritmicaParser.CmdCasoContext ctx) {
         saida.append(getIndent()).append("switch (").append(gerarExpAritmetica(ctx.exp_aritmetica())).append(") {\n");
@@ -648,7 +740,9 @@ public class GeradorC extends LinguagemAlgoritmicaBaseVisitor<Void> {
         if (ctx.SENAO() != null) {
             saida.append(getIndent()).append("default:\n");
             indentLevel++;
-            for (var cmd : ctx.cmd()) visitCmd(cmd);
+            for (var cmd : ctx.cmd()) {
+                visitCmd(cmd);
+            }
             indentLevel--;
         }
 
@@ -657,12 +751,16 @@ public class GeradorC extends LinguagemAlgoritmicaBaseVisitor<Void> {
         return null;
     }
 
+    // Gera todos os itens pertencentes ao comando caso.
     @Override
     public Void visitSelecao(LinguagemAlgoritmicaParser.SelecaoContext ctx) {
-        for (var item : ctx.item_selecao()) visitItem_selecao(item);
+        for (var item : ctx.item_selecao()) {
+            visitItem_selecao(item);
+        }
         return null;
     }
 
+    // Gera um bloco case do comando caso.
     @Override
     public Void visitItem_selecao(LinguagemAlgoritmicaParser.Item_selecaoContext ctx) {
         for (var ni : ctx.constantes().numero_intervalo()) {
@@ -679,27 +777,34 @@ public class GeradorC extends LinguagemAlgoritmicaBaseVisitor<Void> {
         }
 
         indentLevel++;
-        for (var cmd : ctx.cmd()) visitCmd(cmd);
+        for (var cmd : ctx.cmd()) {
+            visitCmd(cmd);
+        }
         saida.append(getIndent()).append("break;\n");
         indentLevel--;
         return null;
     }
 
+    // Converte um intervalo numérico da gramática para inteiro,
+    // considerando possíveis sinais negativos.
     private int parseNumeroIntervalo(LinguagemAlgoritmicaParser.Numero_intervaloContext ni, int posNum) {
         int valor = Integer.parseInt(ni.NUM_INT(posNum).getText());
         if (ni.op_unario().size() > posNum && ni.op_unario(posNum) != null) {
             int opIndex  = ni.op_unario(posNum).getStart().getTokenIndex();
             int numIndex = ni.NUM_INT(posNum).getSymbol().getTokenIndex();
-            if (opIndex < numIndex) valor = -valor;
+            if (opIndex < numIndex) {
+                valor = -valor;
+            }
         }
         return valor;
     }
 
+    // Gera laços do tipo para utilizando for em C.
     @Override
     public Void visitCmdPara(LinguagemAlgoritmicaParser.CmdParaContext ctx) {
-        String ident  = ctx.IDENT().getText();
+        String ident = ctx.IDENT().getText();
         String inicio = gerarExpAritmetica(ctx.exp_aritmetica(0));
-        String fim    = gerarExpAritmetica(ctx.exp_aritmetica(1));
+        String fim = gerarExpAritmetica(ctx.exp_aritmetica(1));
 
         saida.append(getIndent()).append("for (")
                 .append(ident).append(" = ").append(inicio).append("; ")
@@ -707,35 +812,45 @@ public class GeradorC extends LinguagemAlgoritmicaBaseVisitor<Void> {
                 .append(ident).append("++) {\n");
 
         indentLevel++;
-        for (var cmd : ctx.cmd()) visitCmd(cmd);
+        for (var cmd : ctx.cmd()) {
+            visitCmd(cmd);
+        }
         indentLevel--;
 
         saida.append(getIndent()).append("}\n");
         return null;
     }
 
+    // Gera laços enquanto utilizando while.
     @Override
     public Void visitCmdEnquanto(LinguagemAlgoritmicaParser.CmdEnquantoContext ctx) {
         saida.append(getIndent()).append("while (").append(gerarExpressao(ctx.expressao())).append(") {\n");
 
         indentLevel++;
-        for (var cmd : ctx.cmd()) visitCmd(cmd);
+        for (var cmd : ctx.cmd()) {
+            visitCmd(cmd);
+        }
         indentLevel--;
 
         saida.append(getIndent()).append("}\n");
         return null;
     }
 
+    // Gera laços faça-enquanto utilizando do-while.
     @Override
     public Void visitCmdFaca(LinguagemAlgoritmicaParser.CmdFacaContext ctx) {
         saida.append(getIndent()).append("do {\n");
 
         indentLevel++;
-        for (var cmd : ctx.cmd()) visitCmd(cmd);
+        for (var cmd : ctx.cmd()) {
+            visitCmd(cmd);
+        }
         indentLevel--;
 
         String cond = gerarExpressao(ctx.expressao());
         saida.append(getIndent());
+        // Ajusta a condição do do-while para preservar
+        // a semântica do comando faca-ate da linguagem Alguma.
         if (expressaoTemNaoExterno(ctx.expressao())) {
             saida.append("} while (").append(cond).append(");\n");
         } else {
@@ -744,17 +859,21 @@ public class GeradorC extends LinguagemAlgoritmicaBaseVisitor<Void> {
         return null;
     }
 
+    // Gera chamadas de procedimentos e funções.
     @Override
     public Void visitCmdChamada(LinguagemAlgoritmicaParser.CmdChamadaContext ctx) {
         saida.append(getIndent()).append(ctx.IDENT().getText()).append("(");
         for (int i = 0; i < ctx.expressao().size(); i++) {
-            if (i > 0) saida.append(",");
+            if (i > 0) {
+                saida.append(",");
+            }
             saida.append(gerarExpressao(ctx.expressao(i)));
         }
         saida.append(");\n");
         return null;
     }
 
+    // Gera comandos de retorno de funções.
     @Override
     public Void visitCmdRetorne(LinguagemAlgoritmicaParser.CmdRetorneContext ctx) {
         saida.append(getIndent()).append("return ").append(gerarExpressao(ctx.expressao())).append(";\n");

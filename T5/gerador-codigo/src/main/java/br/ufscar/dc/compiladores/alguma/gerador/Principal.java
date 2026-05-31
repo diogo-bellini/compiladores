@@ -28,11 +28,14 @@ public class Principal {
         // Escrita da saída
         PrintWriter writer = new PrintWriter(args[1]);
 
+        // Caso não existam erros semânticos, gera o código C.
         if (SemanticoUtils.errosSemanticos.isEmpty()) {
             GeradorC gerador = new GeradorC();
             gerador.visitPrograma(arvore);
             writer.print(gerador.getCodigo());
         } else {
+            // Caso existam erros semânticos, escreve todos eles
+            // no arquivo de saída e encerra a compilação.
             for (var erro : SemanticoUtils.errosSemanticos) {
                 writer.println(erro);
             }
